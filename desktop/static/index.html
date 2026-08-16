@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Airtel 5G Router | Real-Time Bandwidth & Device Monitor</title>
+  <meta name="description" content="Real-time bandwidth monitor and Wi-Fi link telemetry for Airtel ZLT X17M & ZLT W304VA PRO router.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Navigation Header -->
+    <header class="top-nav">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <div class="pulse-ring"></div>
+          <svg class="signal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <circle cx="12" cy="20" r="1.5" fill="currentColor"></circle>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <div class="title-row">
+            <h1>Airtel 5G Network Monitor</h1>
+            <span class="status-badge online" id="connectionBadge">
+              <span class="status-dot"></span> LIVE
+            </span>
+          </div>
+          <p class="subtitle" id="deviceModels">ODU: ZLT X17M &bull; IDU: ZLT W304VA PRO &bull; Gateway: 192.168.1.1</p>
+        </div>
+      </div>
+
+      <div class="nav-controls">
+        <div class="control-group">
+          <label for="pollIntervalSelect">Poll Rate:</label>
+          <select id="pollIntervalSelect" class="styled-select">
+            <option value="1">1.0s (Ultra-Fast)</option>
+            <option value="1.5">1.5s (Fast)</option>
+            <option value="2" selected>2.0s (Balanced)</option>
+            <option value="3">3.0s (Normal)</option>
+            <option value="5">5.0s (Low Traffic)</option>
+          </select>
+        </div>
+        <button id="pauseResumeBtn" class="btn btn-secondary" title="Pause or Resume Live Telemetry">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
+          </svg>
+          <span>Pause</span>
+        </button>
+        <button id="manualRefreshBtn" class="btn btn-primary" title="Force Refresh Now">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+          <span>Refresh</span>
+        </button>
+        <button id="rebootBtn" class="btn btn-danger" title="Reboot the router (drops connection ~1-2 min)">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+          <span>Reboot</span>
+        </button>
+        <button id="stopAppBtn" class="btn btn-secondary" title="Stop the monitor and close the app" style="display:none;">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+          </svg>
+          <span>Stop App</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Metric Cards Grid -->
+      <section class="metrics-grid">
+        
+        <!-- Download Speed Card -->
+        <div class="metric-card download-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge download-badge">WAN DOWNLOAD</span>
+              <span class="card-hint" id="dlKbsHint">0.0 kB/s</span>
+            </div>
+            <div class="card-icon-circle download-icon-circle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <polyline points="19 12 12 19 5 12"></polyline>
+              </svg>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="speed-value-display">
+              <span class="speed-number" id="wanDlSpeed">0.00</span>
+              <span class="speed-unit">Mbps</span>
+            </div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill download-fill" id="wanDlBar" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="sub-metric">Total DL: <strong id="totalDlFlow">-</strong></span>
+            <span class="sub-metric">Peak: <strong id="peakDlSpeed">0.0 Mbps</strong></span>
+          </div>
+        </div>
+
+        <!-- Upload Speed Card -->
+        <div class="metric-card upload-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge upload-badge">WAN UPLOAD</span>
+              <span class="card-hint" id="ulKbsHint">0.0 kB/s</span>
+            </div>
+            <div class="card-icon-circle upload-icon-circle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="speed-value-display">
+              <span class="speed-number" id="wanUlSpeed">0.00</span>
+              <span class="speed-unit">Mbps</span>
+            </div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill upload-fill" id="wanUlBar" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="sub-metric">Total UL: <strong id="totalUlFlow">-</strong></span>
+            <span class="sub-metric">Peak: <strong id="peakUlSpeed">0.0 Mbps</strong></span>
+          </div>
+        </div>
+
+        <!-- 5G / 4G Cellular Radio Card -->
+        <div class="metric-card radio-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge radio-badge" id="netTypeBadge">5G (NSA)</span>
+              <span class="card-hint" id="carrierName">Airtel</span>
+            </div>
+            <div class="signal-bars-icon" id="signalBarsContainer" title="Signal Strength">
+              <div class="bar bar-1 active"></div>
+              <div class="bar bar-2 active"></div>
+              <div class="bar bar-3 active"></div>
+              <div class="bar bar-4"></div>
+            </div>
+          </div>
+          <div class="card-body radio-metrics">
+            <div class="radio-stat-row">
+              <div class="radio-stat">
+                <span class="stat-lbl">5G RSRP</span>
+                <span class="stat-val" id="rsrp5gVal">- dBm</span>
+              </div>
+              <div class="radio-stat">
+                <span class="stat-lbl">5G SINR</span>
+                <span class="stat-val" id="sinr5gVal">- dB</span>
+              </div>
+            </div>
+            <div class="radio-stat-row secondary">
+              <div class="radio-stat">
+                <span class="stat-lbl">4G RSRP</span>
+                <span class="stat-val" id="rsrp4gVal">- dBm</span>
+              </div>
+              <div class="radio-stat">
+                <span class="stat-lbl">4G SINR</span>
+                <span class="stat-val" id="sinr4gVal">- dB</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="sub-metric">Radio Link: <strong id="radioStatusText">Excellent</strong></span>
+            <span class="sub-metric">Total Data: <strong id="totalMonthFlow">-</strong></span>
+          </div>
+        </div>
+
+        <!-- Router Hardware Health Card -->
+        <div class="metric-card hardware-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge hw-badge">ROUTER HEALTH</span>
+              <span class="card-hint">ODU + IDU</span>
+            </div>
+            <div class="card-icon-circle hw-icon-circle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                <rect x="9" y="9" width="6" height="6"></rect>
+                <line x1="9" y1="1" x2="9" y2="4"></line>
+                <line x1="15" y1="1" x2="15" y2="4"></line>
+                <line x1="9" y1="20" x2="9" y2="23"></line>
+                <line x1="15" y1="20" x2="15" y2="23"></line>
+                <line x1="20" y1="9" x2="23" y2="9"></line>
+                <line x1="20" y1="14" x2="23" y2="14"></line>
+                <line x1="1" y1="9" x2="4" y2="9"></line>
+                <line x1="1" y1="14" x2="4" y2="14"></line>
+              </svg>
+            </div>
+          </div>
+          <div class="card-body hw-stats">
+            <div class="hw-gauge-item">
+              <div class="hw-gauge-label">
+                <span>CPU Load</span>
+                <span id="cpuVal">0%</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill cpu-fill" id="cpuBar" style="width: 0%;"></div>
+              </div>
+            </div>
+            <div class="hw-gauge-item">
+              <div class="hw-gauge-label">
+                <span>Board Temperature</span>
+                <span id="tempVal">-- &deg;C</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill temp-fill" id="tempBar" style="width: 45%;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="sub-metric">Active Devices: <strong id="activeDevicesCount">0</strong></span>
+            <span class="sub-metric">System: <strong id="systemStatusText">Nominal</strong></span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Cellular & Cell-Lock Panel (read-only) -->
+      <section class="chart-section cell-lock-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h2>Cellular &amp; Cell Lock</h2>
+            <span class="section-subtitle">Live serving cell, active bands &amp; lock status (view-only)</span>
+          </div>
+          <span class="section-subtitle" id="cellNetType">5G (NSA)</span>
+        </div>
+        <div class="cell-lock-grid">
+          <div class="cell-box">
+            <span class="cell-lbl">Serving 5G — PCI / EARFCN</span>
+            <span class="cell-val"><strong id="clPci5g">-</strong> / <span id="clFreq5g">-</span></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">Serving 4G — PCI / EARFCN</span>
+            <span class="cell-val"><strong id="clPci4g">-</strong> / <span id="clFreq4g">-</span></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">Active 5G Band</span>
+            <span class="cell-val"><strong id="clBand5g">-</strong></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">Active 4G Bands</span>
+            <span class="cell-val"><strong id="clBand4g">-</strong></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">LTE Cell Lock</span>
+            <span class="cell-val"><span id="clLteLock" class="lock-pill">-</span> <span id="clLteLockDetail" class="lock-detail"></span></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">5G (NR) Cell Lock</span>
+            <span class="cell-val"><span id="clNrLock" class="lock-pill">-</span> <span id="clNrLockDetail" class="lock-detail"></span></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">Band Lock (4G / 5G)</span>
+            <span class="cell-val"><span id="clBandLock4g" class="lock-pill">-</span> <span id="clBandLock5g" class="lock-pill">-</span></span>
+          </div>
+          <div class="cell-box">
+            <span class="cell-lbl">Signal — RSRP / SINR / CQI</span>
+            <span class="cell-val"><strong id="clRsrp">-</strong> / <span id="clSinr">-</span> / <span id="clCqi">-</span></span>
+          </div>
+        </div>
+        <p class="cell-note">Editing band/PCI lock is not available — this router firmware blocks the write command. Change these in the default UI at <a href="http://192.168.1.1" target="_blank" rel="noopener">192.168.1.1</a> if needed.</p>
+      </section>
+
+      <!-- Reboot confirmation modal -->
+      <div class="modal-overlay" id="rebootModal" style="display:none;">
+        <div class="modal-box">
+          <h3>Reboot Router?</h3>
+          <p>This restarts the ZLT X17M. Your internet and Wi-Fi will drop for about <strong>1–2 minutes</strong> while it comes back up.</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" id="rebootCancelBtn">Cancel</button>
+            <button class="btn btn-danger" id="rebootConfirmBtn">Yes, reboot now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Bandwidth Timeline Chart -->
+      <section class="chart-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h2>Real-Time Bandwidth Stream</h2>
+            <span class="section-subtitle">Live 60-second throughput history</span>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-color download-legend"></span>
+              <span>Download (Mbps)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color upload-legend"></span>
+              <span>Upload (Mbps)</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="bandwidthCanvas"></canvas>
+        </div>
+      </section>
+
+      <!-- Connected Devices Fleet Section -->
+      <section class="devices-section">
+        <div class="devices-header">
+          <div class="section-title-group">
+            <div class="title-with-pill">
+              <h2>Connected Devices</h2>
+              <span class="count-pill" id="devicePillCount">0</span>
+            </div>
+            <span class="section-subtitle">Wi-Fi PHY link rates &amp; signal per client</span>
+          </div>
+
+          <div class="device-actions">
+            <!-- Search Input -->
+            <div class="search-box">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="deviceSearchInput" placeholder="Search by name, IP, or MAC...">
+            </div>
+
+            <!-- Filter Buttons -->
+            <div class="filter-tabs">
+              <button class="tab-btn active" data-filter="all">All</button>
+              <button class="tab-btn" data-filter="5g">5 GHz Wi-Fi</button>
+              <button class="tab-btn" data-filter="24g">2.4 GHz</button>
+              <button class="tab-btn" data-filter="lan">LAN</button>
+            </div>
+
+            <!-- Sort Select -->
+            <select id="deviceSortSelect" class="styled-select">
+              <option value="speed">Sort by Link Speed</option>
+              <option value="signal">Sort by Signal Quality</option>
+              <option value="name">Sort by Name</option>
+              <option value="ip">Sort by IP Address</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Device Grid Container -->
+        <div class="devices-grid" id="devicesContainer">
+          <!-- Dynamically populated device cards -->
+          <div class="empty-state">
+            <div class="loading-spinner"></div>
+            <p>Scanning connected devices from Airtel router...</p>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Rename Alias Modal -->
+    <div class="modal-overlay" id="aliasModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <div class="modal-icon-badge">✏️</div>
+            <div>
+              <h3>Rename Device</h3>
+              <p class="modal-subtitle" id="aliasModalIdentifier">MAC: -</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" id="closeAliasModalBtn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="aliasInput">Friendly Device Name:</label>
+            <input type="text" id="aliasInput" class="styled-input" placeholder="e.g. Matt's Pixel 6, Living Room Smart TV">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelAliasBtn">Cancel</button>
+          <button class="btn btn-primary" id="saveAliasBtn">Save Name</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
