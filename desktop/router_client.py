@@ -387,3 +387,84 @@ class ZLTRouterClient:
         ~1-2 minutes and comes back automatically."""
         res = self._query(6, method="POST", rebootType=1)
         return bool(res.get("success"))
+
+    # ---- LAN DNS (the servers the router's DHCP hands to devices) ----
+    # cmd 3 (NETWORK_CONFIG) returns the whole LAN/DHCP record as one object.
+    # The stock web UI hides the secondary-DNS box (vice_dns) from this account
+    # level, but its save handler still posts the field. A save must echo the
+    # full record back: posting only the DNS keys would reset the LAN IP, pool
+    # and lease. These are exactly the keys the stock UI sends.
+    _LAN_SAVE_KEYS = ("lanIp", "netMask", "dhcpServer", "main_dns", "vice_dns",
+                      "ipBegin", "ipEnd", "expireTime", "ipv6_mode",
+                      "ipv6_startIp", "ipv6_endIp", "ipv6_main_dns", "ipv6_vice_dns")
+
+    @staticmethod
+    def _is_ipv4(value: str) -> bool:
+        parts = value.split(".")
+        if len(parts) != 4:
+            return False
+        for p in parts:
+            if not p.isdigit() or len(p) > 3 or int(p) > 255 or (len(p) > 1 and p[0] == "0"):
+                return False
+        return True
+
+    def get_dns(self) -> dict:
+        res = self._query(3)
+        if not res.get("success"):
+            return {"success": False, "error": res.get("message") or "Router did not return LAN settings"}
+        return {
+            "success": True,
+            "primary": res.get("main_dns", ""),
+            "secondary": res.get("vice_dns", ""),
+            "dhcp_enabled": res.get("dhcpServer") == "1",
+        }
+
+    def set_dns(self, primary: str, secondary: str) -> dict:
+        """Sets the LAN DNS servers. An empty secondary makes the router offer
+        itself (192.168.1.1) as the second server. The router restarts its DHCP
+        service on save, so the result is confirmed by reading it back."""
+        primary = (primary or "").strip()
+        secondary = (secondary or "").strip()
+        if not self._is_ipv4(primary):
+            return {"success": False, "error": "Primary DNS must be an IPv4 address"}
+        if secondary and not self._is_ipv4(secondary):
+            return {"success": False, "error": "Secondary DNS must be an IPv4 address or empty"}
+        if primary == secondary:
+            return {"success": False, "error": "Primary and secondary DNS must be different"}
+
+        current = self._query(3)
+        if not current.get("success"):
+            return {"success": False, "error": current.get("message") or "Could not read current LAN settings"}
+        if current.get("dhcpServer") != "1":
+            return {"success": False, "error": "DHCP server is off, so the router is not handing out DNS"}
+        # In network mode 7 the stock UI turns this save into a full reboot.
+        if self._query(80).get("network_mode") == "7":
+            return {"success": False, "error": "This network mode needs a reboot to change DNS; use the router's own page"}
+
+        payload = {k: current.get(k, "") for k in self._LAN_SAVE_KEYS}
+        if current.get("supportList"):
+            payload["bindPort0"] = current.get("bindPort0", "")
+        payload["main_dns"] = primary
+        payload["vice_dns"] = secondary
+        payload["token"] = self._query(233).get("token", "")
+
+        res = self._query(3, method="POST", **payload)
+        if not res.get("success"):
+            msg = res.get("message") or "router rejected the change"
+            if msg == "LIMITED_ACCESS":
+                msg = "the router blocks DNS changes for this account (LIMITED_ACCESS)"
+            return {"success": False, "error": msg}
+
+        last = None
+        for _ in range(8):
+            time.sleep(2)
+            now = self.get_dns()
+            if not now.get("success"):
+                continue  # DHCP service may still be restarting
+            last = now
+            if now["primary"] == primary and now["secondary"] == secondary:
+                return {"success": True, "verified": True, "primary": primary, "secondary": secondary}
+        if last:
+            return {"success": False, "error": "The router accepted the save but kept its old values",
+                    "primary": last["primary"], "secondary": last["secondary"]}
+        return {"success": True, "verified": False, "primary": primary, "secondary": secondary}

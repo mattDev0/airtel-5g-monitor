@@ -601,6 +601,67 @@
     }
   });
 
+  // ---- LAN DNS ----
+  const dnsPrimaryInput = document.getElementById('dnsPrimaryInput');
+  const dnsSecondaryInput = document.getElementById('dnsSecondaryInput');
+  const dnsSaveBtn = document.getElementById('dnsSaveBtn');
+  const dnsReloadBtn = document.getElementById('dnsReloadBtn');
+  const dnsStatus = document.getElementById('dnsStatus');
+
+  async function loadDns() {
+    if (!dnsPrimaryInput) return;
+    dnsStatus.textContent = 'Loading…';
+    try {
+      const res = await fetch('/api/dns', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'router did not answer');
+      dnsPrimaryInput.value = data.primary || '';
+      dnsSecondaryInput.value = data.secondary || '';
+      dnsStatus.textContent = data.dhcp_enabled ? 'DHCP on' : 'DHCP off';
+    } catch (err) {
+      dnsStatus.textContent = 'Unavailable';
+      showToast(`Could not read DNS: ${err.message}`, 'error');
+    }
+  }
+
+  if (dnsReloadBtn) dnsReloadBtn.addEventListener('click', loadDns);
+
+  if (dnsSaveBtn) dnsSaveBtn.addEventListener('click', async () => {
+    const primary = dnsPrimaryInput.value.trim();
+    const secondary = dnsSecondaryInput.value.trim();
+    const summary = secondary ? `${primary} and ${secondary}` : `${primary} (secondary: router)`;
+    if (!confirm(`Set router DNS to ${summary}?\nThe router restarts its DHCP service (about 30 seconds).`)) return;
+    dnsSaveBtn.disabled = true;
+    dnsSaveBtn.textContent = 'Saving…';
+    dnsStatus.textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/dns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true, primary, secondary })
+      });
+      const data = await res.json();
+      if (data.success && data.verified) {
+        showToast('DNS saved and confirmed by the router', 'success');
+      } else if (data.success) {
+        showToast('DNS saved. The router has not confirmed yet; tap Reload shortly.', 'info');
+      } else {
+        showToast(`DNS not changed: ${data.error}`, 'error');
+      }
+      if (data.primary !== undefined) {
+        dnsPrimaryInput.value = data.primary;
+        dnsSecondaryInput.value = data.secondary || '';
+      }
+      dnsStatus.textContent = data.success ? 'DHCP on' : 'Not changed';
+    } catch (err) {
+      dnsStatus.textContent = 'Unknown';
+      showToast(`DNS save failed: ${err.message}`, 'error');
+    } finally {
+      dnsSaveBtn.disabled = false;
+      dnsSaveBtn.textContent = 'Save DNS';
+    }
+  });
+
   // ---- Stop App (native Android only) ----
   // window.AndroidBridge is injected by the Android app's WebView. On desktop it
   // is absent, so the button stays hidden.
@@ -629,5 +690,6 @@
 
   // Initial Start
   startPoller();
+  loadDns();
 
 })();

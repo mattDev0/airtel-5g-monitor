@@ -1200,6 +1200,24 @@ canvas#bandwidthCanvas {
 .cell-note a { color: var(--color-cyan); text-decoration: none; }
 .cell-note a:hover { text-decoration: underline; }
 
+/* ---- LAN DNS panel (reuses .cell-box / .cell-lbl / .cell-note) ---- */
+.dns-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  padding: 4px 0 6px;
+}
+.dns-input {
+  width: 100%;
+  font-family: var(--font-mono);
+}
+.dns-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 /* ---- Reboot confirm modal (scoped to #rebootModal so it does NOT
    override the shared .modal-overlay rule used by the other dialogs) ---- */
 #rebootModal {

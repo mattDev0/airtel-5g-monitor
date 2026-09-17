@@ -40,6 +40,9 @@ This rewrites `mobile/airtel_monitor.py` (binds `0.0.0.0`) and
 - ✅ Live **total** WAN download/upload (from the router's `cmd 18` byte counters).
 - ✅ Device list, Wi-Fi PHY link rates, signal, rename (local aliases).
 - ✅ Read-only band / cell-lock status; router **reboot**.
+- ✅ **LAN DNS** — view and set the primary/secondary DNS the router hands to
+  devices (`cmd 3`). The stock UI hides the secondary field; the app echoes the
+  full LAN record on save so nothing else changes, and reads it back to confirm.
 - ❌ **Per-device** throughput — not exposed by the firmware (no per-client counters).
 - ❌ **QoS speed limiter** and **band/PCI-lock editing** — the router blocks those
   writes (`LIMITED_ACCESS`), so they were removed rather than shown broken.

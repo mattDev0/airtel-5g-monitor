@@ -109,7 +109,9 @@ class MonitorHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/config":
             self._json({"router_host": client.host, "poll_interval": poll_interval,
                         "custom_aliases": client.custom_aliases}); return
-        key = "index.html" if path in ("/", "/index.html") else path.lstrip("/")
+        if path == "/api/dns":
+            self._json(client.get_dns()); return
+        key ="index.html" if path in ("/", "/index.html") else path.lstrip("/")
         if key in _ASSETS_B64:
             self._asset(key); return
         self._send(b"Not found", "text/plain", 404)
@@ -132,6 +134,10 @@ class MonitorHandler(http.server.BaseHTTPRequestHandler):
             if body.get("confirm") is not True:
                 self._json({"success": False, "error": "Missing confirm:true"}, 400); return
             self._json({"success": client.reboot()}); return
+        if path == "/api/dns":
+            if body.get("confirm") is not True:
+                self._json({"success": False, "error": "Missing confirm:true"}, 400); return
+            self._json(client.set_dns(body.get("primary", ""), body.get("secondary", ""))); return
         if path == "/api/set-interval":
             global poll_interval
             poll_interval = max(1.0, min(10.0, float(body.get("interval", 2.0))))

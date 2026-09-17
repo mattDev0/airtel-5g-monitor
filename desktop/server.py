@@ -62,7 +62,11 @@ class MonitorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(config).encode("utf-8"))
             return
-            
+
+        elif parsed.path == "/api/dns":
+            self._send_json(client.get_dns())
+            return
+
         # Default static file handling
         return super().do_GET()
 
@@ -96,6 +100,14 @@ class MonitorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 return
             success = client.reboot()
             self._send_json({"success": success})
+            return
+
+        elif parsed.path == "/api/dns":
+            # Same guard as reboot: saving restarts the router's DHCP service.
+            if req_json.get("confirm") is not True:
+                self._send_json({"success": False, "error": "Missing confirm:true"}, 400)
+                return
+            self._send_json(client.set_dns(req_json.get("primary", ""), req_json.get("secondary", "")))
             return
 
         elif parsed.path == "/api/set-interval":

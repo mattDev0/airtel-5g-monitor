@@ -278,6 +278,32 @@
         <p class="cell-note">Editing band/PCI lock is not available — this router firmware blocks the write command. Change these in the default UI at <a href="http://192.168.1.1" target="_blank" rel="noopener">192.168.1.1</a> if needed.</p>
       </section>
 
+      <!-- LAN DNS Panel -->
+      <section class="chart-section dns-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h2>LAN DNS</h2>
+            <span class="section-subtitle">DNS servers the router hands to your devices</span>
+          </div>
+          <span class="section-subtitle" id="dnsStatus">-</span>
+        </div>
+        <div class="dns-form">
+          <label class="cell-box" for="dnsPrimaryInput">
+            <span class="cell-lbl">Primary DNS</span>
+            <input type="text" id="dnsPrimaryInput" class="styled-input dns-input" placeholder="1.1.1.1" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="cell-box" for="dnsSecondaryInput">
+            <span class="cell-lbl">Secondary DNS</span>
+            <input type="text" id="dnsSecondaryInput" class="styled-input dns-input" placeholder="Blank = router (192.168.1.1)" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <div class="dns-actions">
+          <button class="btn btn-secondary" id="dnsReloadBtn">Reload</button>
+          <button class="btn btn-primary" id="dnsSaveBtn">Save DNS</button>
+        </div>
+        <p class="cell-note">Saving restarts the router's DHCP service (about 30 seconds, Wi-Fi stays up). Devices pick up the new servers when they reconnect or renew. A blank secondary makes the router offer itself instead.</p>
+      </section>
+
       <!-- Reboot confirmation modal -->
       <div class="modal-overlay" id="rebootModal" style="display:none;">
         <div class="modal-box">
