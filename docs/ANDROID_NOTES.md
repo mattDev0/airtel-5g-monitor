@@ -1,46 +1,54 @@
-# Android build notes & gotchas
+# Android Architecture Notes & Toolchain (Kotlin Native Compose)
 
-Hard-won lessons from getting the Chaquopy app running on **Android 17 (SDK 37)**.
-Read this before touching versions or debugging "app opens but no data".
+The Android app has been migrated from Chaquopy (embedded Python + WebView) to **100% Native Kotlin + Jetpack Compose**.
 
-## Toolchain versions that work
-- Android Gradle Plugin **9.3.1**, Gradle **9.5**
-- **Chaquopy 17.0.0** (`gradle/libs.versions.toml`). Chaquopy 16.x does **not**
-  support AGP 9 — sync fails at the plugin. 17.0 supports AGP up to 9.2.x; 9.3.1
-  works in practice.
-- Target Python **3.11** (Chaquopy needs a matching *build* Python installed on
-  the PC; installing Python 3.11 on the dev machine was required).
+## Toolchain
+- **Android Gradle Plugin (AGP)**: 9.3.1
+- **Gradle**: 9.5
+- **Kotlin**: 2.2.10 (built into AGP 9 with Kotlin Compose Plugin)
+- **Jetpack Compose**: Compose BOM `2024.10.01` (Material3 1.3.1, UI 1.7.5)
+- **Networking**: OkHttp 4.12.0
+- **Target SDK**: 37 (Android 17)
+- **Min SDK**: 24 (Android 7.0)
 
-## Gotcha 1 — Gradle configuration cache vs Chaquopy
-Gradle 9 enables the configuration cache by default. Chaquopy launches Python
-during the configuration phase, which the cache forbids →
-`external process started ... during configuration time is unsupported`.
-**Fix:** `org.gradle.configuration-cache=false` in `gradle.properties`.
+## Architecture Overview
+- **Networking & Data Layer** (`com.airtel.monitor.data`):
+  - `ZltRouterClient`: Communicates with router's JSON-RPC HTTP CGI engine at `http://192.168.1.1/cgi-bin/http.cgi`.
+    - Automated challenge-token SHA-256 login (`cmd 232` -> `cmd 100`) and session re-authentication.
+    - WAN throughput delta speed computation using byte counters from `cmd 18`.
+    - Fast telemetry polling for dashboard metrics, DHCP client list, 5GHz & 2.4GHz Wi-Fi maps, and system status.
+    - Cached slow polling (every 20s) for heavy hardware telemetry (`cmd 1018`), cell-lock status (`cmd 160`), and band-lock switches (`cmd 161`).
+    - LAN DNS query and save (`cmd 3`) with multi-poll verification.
+    - Router reboot execution (`cmd 6`).
+  - `AliasRepository`: Persists custom device aliases to `device_aliases.json` in app storage.
+  - `PreferencesRepository`: Manages gateway IP, router credentials, and polling interval in `SharedPreferences`.
+- **ViewModel & State** (`com.airtel.monitor.ui.viewmodel`):
+  - `MonitorViewModel`: Background polling coroutine loop providing reactive `StateFlow<MonitorUiState>` for real-time UI updates.
+- **Jetpack Compose UI** (`com.airtel.monitor.ui`):
+  - `HeaderBar`: Brand title, live pulsing status dot, gateway info, poll rate dropdown (1.0s to 5.0s), and quick action buttons (Pause, Refresh, DNS, Reboot, Settings).
+  - `HeroMetricCards`: Download speed, upload speed, 5G/4G cellular radio (4-bar signal indicator, RSRP/SINR stats), and router health (CPU & temperature gauges).
+  - `BandwidthTimelineChart`: Native Compose `Canvas` rendering 60-second throughput history with cubic Bézier curves and dual vertical gradient fills.
+  - `CellularCellLockCard`: Read-only serving 4G/5G PCI/EARFCN, active bands, LTE & NR cell lock pills.
+  - `LanDnsCard`: Inline primary and secondary DNS editing and DHCP verification.
+  - `DeviceFleetSection`: Connected devices with avatar emojis, rename modal, band tags, PHY link rates (Tx/Rx), signal meter bar, and tap-to-copy IP.
+  - `Dialogs`: Modals for renaming devices, router reboot confirmation, and settings.
 
-## Gotcha 2 — Android 16+/17 Local Network Protection (the "no data" bug)
-On Android 16+, apps targeting SDK 37+ are **blocked from LAN addresses**
-(192.168.x.x) by default. `INTERNET` is not enough. Symptom: the WebView loads
-(loopback is exempt) but the poller logs `Router login error: timed out`.
-**Fix:** declare **and request at runtime** `android.permission.ACCESS_LOCAL_NETWORK`
-(see `AndroidManifest.xml` + `MainActivity.onCreate`). After the user taps Allow,
-the poller logs `Authenticated with Airtel ZLT router`.
+## Android 16/17 Permission: Local Network Protection
+On Android 16+, apps targeting SDK 37+ are blocked from private LAN addresses (e.g. `192.168.1.1`) by default unless granted:
+- Permission: `android.permission.ACCESS_LOCAL_NETWORK`
+- Declared in `AndroidManifest.xml` and requested at runtime in `MainActivity`.
 
-## Gotcha 3 — WebView ignores JS dialogs without a WebChromeClient
-`window.confirm()` / `alert()` silently return false in a WebView unless a
-`WebChromeClient` is set. This broke the "Stop App" confirm.
-**Fix:** `webView.webChromeClient = WebChromeClient()` in `MainActivity`.
+## Rollback Backup
+A full backup of the previous Chaquopy app is archived:
+- **Backup APK**: `backup/airtel_monitor_previous_chaquopy.apk`
+- **Git Branch**: `backup-chaquopy-version`
+- **To reinstall previous APK via ADB**:
+  ```powershell
+  & "C:\Users\amatt\AppData\Local\Android\Sdk\platform-tools\adb.exe" install -r "backup\airtel_monitor_previous_chaquopy.apk"
+  ```
 
-## Architecture recap
-- `MainActivity` starts Python via Chaquopy (`python/start.py` → `airtel_monitor.main()`
-  on a daemon thread), then shows a WebView pointed at `http://127.0.0.1:8080`.
-- `app/src/main/python/airtel_monitor.py` is **generated** by `tools/build_mobile.py`
-  from `desktop/router_client.py` + `desktop/static/`. Don't edit it by hand —
-  edit the desktop sources and re-run the tool.
-- "Stop App" uses a `@JavascriptInterface` bridge (`AndroidBridge.stopApp()`) that
-  finishes the task and kills the process.
-
-## Rebuild + install from the command line (WSL/Windows)
-```
-JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
-gradlew.bat :app:installDebug -x lint --console=plain
+## Rebuild and Install from Command Line
+```powershell
+$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat :app:installDebug -x lint --console=plain
 ```

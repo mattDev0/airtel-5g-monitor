@@ -13,15 +13,16 @@ pip dependencies):
 |------|-------|--------|
 | **Desktop** | `desktop/` | `python desktop/server.py` (or `start_monitor.bat`), open `http://127.0.0.1:8080` |
 | **Single-file / Termux** | `mobile/airtel_monitor.py` | copy to phone, run in Pydroid 3 / Termux |
-| **Android app** | `app/` (Chaquopy + WebView) | build in Android Studio → installable APK |
+| **Android app** | `app/` (Native Kotlin Compose) | build in Android Studio → installable APK |
 
 ## Layout
 ```
 desktop/          Laptop app: server.py, router_client.py, static/ (web UI)
 mobile/           Single-file bundle + Termux launcher + phone setup guide
-app/              Android Studio app (Chaquopy embeds Python, WebView shows UI)
-tools/            build_mobile.py — regenerates the bundles from desktop/ sources
-docs/             ANDROID_BUILD.md (build steps) + ANDROID_NOTES.md (gotchas)
+app/              Native Android app (Kotlin + Jetpack Compose + OkHttp)
+tools/            build_mobile.py — regenerates the single-file mobile bundle
+backup/           Archived copy of previous Chaquopy APK (airtel_monitor_previous_chaquopy.apk)
+docs/             ANDROID_BUILD.md + ANDROID_NOTES.md
 ```
 
 ## Source of truth & code generation

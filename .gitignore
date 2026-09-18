@@ -24,3 +24,8 @@ desktop/device_aliases.json
 
 # --- IDE ---
 /.idea/
+
+# --- Local APK backups and build outputs (never commit binaries) ---
+/apk_backup/
+/backup/
+*.apk
