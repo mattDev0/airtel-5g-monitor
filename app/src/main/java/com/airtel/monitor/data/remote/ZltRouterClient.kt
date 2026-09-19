@@ -217,6 +217,37 @@ class ZltRouterClient(
         }
     }
 
+    fun queryRaw(
+        cmdId: Int,
+        method: String = "POST",
+        extra: Map<String, Any> = emptyMap(),
+        timeoutSeconds: Long = 5
+    ): String {
+        synchronized(lock) {
+            if (sessionId == null) {
+                if (!login()) return ""
+            }
+            val payload = JSONObject().apply {
+                put("cmd", cmdId)
+                put("method", method)
+                put("sessionId", sessionId ?: "")
+                extra.forEach { (k, v) -> put(k, v) }
+            }
+            try {
+                var reply = transport.post(url, payload.toString(), timeoutSeconds)
+                if (reply.contains("\"message\":\"NO_AUTH\"") || reply.contains("\"message\":\"LOGIN_TIMEOUT\"")) {
+                    if (login()) {
+                        payload.put("sessionId", sessionId ?: "")
+                        reply = transport.post(url, payload.toString(), timeoutSeconds)
+                    }
+                }
+                return reply
+            } catch (e: Exception) {
+                return ""
+            }
+        }
+    }
+
     private fun readWanBytes(): Pair<Long, Long>? {
         val res = query(18)
         val rx = res.optString("rxBytes", "").toLongOrNull() ?: res.optLong("rxBytes", -1)
@@ -733,6 +764,124 @@ class ZltRouterClient(
         }
         return Result.failure(IllegalStateException(
             "Sent, but the router did not answer the check. If this phone was on ${band.label}, reconnect and refresh."))
+    }
+
+    // ---- Network Diagnosis (Ping & Traceroute) ----
+
+    fun startPing(target: String, pingTimes: Int = 4): Result<Unit> {
+        val cleanTarget = target.trim()
+        if (cleanTarget.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Target IP or hostname is required"))
+        }
+        val res = query(
+            cmdId = 168,
+            method = "POST",
+            extra = mapOf(
+                "subcmd" to 0,
+                "pingTimes" to pingTimes,
+                "url" to cleanTarget,
+                "wan_index" to ""
+            )
+        )
+        if (!res.optBoolean("success", false)) {
+            val msg = res.optString("message", "Failed to start ping")
+            return Result.failure(IllegalStateException(msg))
+        }
+        return Result.success(Unit)
+    }
+
+    // Output files must be read with GET, as the router's own tools page does.
+    // A POST read returns nothing until the run has finished (or an empty file),
+    // so lines never appear one by one.
+    fun getPingOutput(): String {
+        val raw = queryRaw(
+            cmdId = 204,
+            method = "GET",
+            extra = mapOf(
+                "url" to "/tmp/tzwww/pingrt",
+                "subcmd" to 168
+            )
+        )
+        if (raw.trim().startsWith("{") && raw.contains("\"success\"")) {
+            return ""
+        }
+        return raw.trim()
+    }
+
+    fun stopPing(): Result<Unit> {
+        query(
+            cmdId = 168,
+            method = "POST",
+            extra = mapOf(
+                "subcmd" to 0,
+                "pingTimes" to 0,
+                "url" to "",
+                "wan_index" to ""
+            )
+        )
+        return Result.success(Unit)
+    }
+
+    fun startTrace(target: String): Result<Unit> {
+        val cleanTarget = target.trim()
+        if (cleanTarget.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Target IP or hostname is required"))
+        }
+        val res = query(
+            cmdId = 168,
+            method = "POST",
+            extra = mapOf(
+                "subcmd" to 2,
+                "stopped" to "0",
+                "port" to -1,
+                "url" to cleanTarget,
+                "wan_index" to ""
+            )
+        )
+        if (!res.optBoolean("success", false)) {
+            val msg = res.optString("message", "Failed to start traceroute")
+            return Result.failure(IllegalStateException(msg))
+        }
+        return Result.success(Unit)
+    }
+
+    fun isTraceRunning(): Boolean {
+        val res = query(
+            cmdId = 168,
+            method = "GET",
+            extra = mapOf("subcmd" to 2)
+        )
+        return res.optString("message", "0") == "1"
+    }
+
+    fun getTraceOutput(): String {
+        val raw = queryRaw(
+            cmdId = 204,
+            method = "GET",
+            extra = mapOf(
+                "url" to "/tmp/tzwww/tracepathrt",
+                "subcmd" to 168
+            )
+        )
+        if (raw.trim().startsWith("{") && raw.contains("\"success\"")) {
+            return ""
+        }
+        return raw.trim()
+    }
+
+    fun stopTrace(): Result<Unit> {
+        query(
+            cmdId = 168,
+            method = "POST",
+            extra = mapOf(
+                "subcmd" to 2,
+                "stopped" to "1",
+                "port" to -1,
+                "url" to "",
+                "wan_index" to ""
+            )
+        )
+        return Result.success(Unit)
     }
 
     private fun inferDeviceType(name: String, mac: String, band: String): DeviceType {

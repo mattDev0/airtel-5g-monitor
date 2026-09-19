@@ -37,6 +37,7 @@ data class MonitorUiState(
     val wifiRadioLoading: Boolean = false,
     val wifiRadioSaving: Boolean = false,
     val wifiRadioMessage: String? = null,
+    val diagnosisState: DiagnosisState = DiagnosisState(),
     val routerHost: String = "192.168.1.1",
     val username: String = "root"
 ) {
@@ -403,12 +404,193 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private var diagnosisJob: Job? = null
+
+    fun setDiagnosisMode(mode: DiagnosisMode) {
+        if (_uiState.value.diagnosisState.isRunning) return
+        _uiState.update {
+            it.copy(
+                diagnosisState = it.diagnosisState.copy(
+                    mode = mode,
+                    error = null
+                )
+            )
+        }
+    }
+
+    fun setDiagnosisTarget(target: String) {
+        _uiState.update {
+            it.copy(
+                diagnosisState = it.diagnosisState.copy(
+                    target = target,
+                    error = null
+                )
+            )
+        }
+    }
+
+    fun setDiagnosisPingTimes(times: Int) {
+        _uiState.update {
+            it.copy(
+                diagnosisState = it.diagnosisState.copy(
+                    pingTimes = times
+                )
+            )
+        }
+    }
+
+    fun startDiagnosis() {
+        if (diagnosisJob?.isActive == true) return
+        val current = _uiState.value.diagnosisState
+        val target = current.target.trim()
+        if (target.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    diagnosisState = it.diagnosisState.copy(
+                        error = "Target address cannot be blank"
+                    )
+                )
+            }
+            return
+        }
+
+        diagnosisJob = viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update {
+                it.copy(
+                    diagnosisState = it.diagnosisState.copy(
+                        isRunning = true,
+                        output = "Starting ${current.mode.name.lowercase()} to $target...\n",
+                        error = null
+                    )
+                )
+            }
+
+            if (current.mode == DiagnosisMode.PING) {
+                val startRes = routerClient.startPing(target, current.pingTimes)
+                if (startRes.isFailure) {
+                    _uiState.update {
+                        it.copy(
+                            diagnosisState = it.diagnosisState.copy(
+                                isRunning = false,
+                                error = startRes.exceptionOrNull()?.message ?: "Failed to start ping"
+                            )
+                        )
+                    }
+                    return@launch
+                }
+
+                var lastOutput = ""
+                var pollCount = 0
+                while (isActive && _uiState.value.diagnosisState.isRunning && pollCount < 60) {
+                    delay(1000)
+                    pollCount++
+                    val out = routerClient.getPingOutput()
+                    if (out.isNotEmpty() && out != lastOutput) {
+                        lastOutput = out
+                        _uiState.update {
+                            it.copy(
+                                diagnosisState = it.diagnosisState.copy(
+                                    output = out
+                                )
+                            )
+                        }
+                    }
+                    if (out.contains("statistic") || out.contains("Network is unreachable") || out.contains("100% packet loss")) {
+                        break
+                    }
+                }
+                routerClient.stopPing()
+                _uiState.update {
+                    it.copy(
+                        diagnosisState = it.diagnosisState.copy(
+                            isRunning = false
+                        )
+                    )
+                }
+            } else {
+                val startRes = routerClient.startTrace(target)
+                if (startRes.isFailure) {
+                    _uiState.update {
+                        it.copy(
+                            diagnosisState = it.diagnosisState.copy(
+                                isRunning = false,
+                                error = startRes.exceptionOrNull()?.message ?: "Failed to start traceroute"
+                            )
+                        )
+                    }
+                    return@launch
+                }
+
+                var lastOutput = ""
+                var pollCount = 0
+                while (isActive && _uiState.value.diagnosisState.isRunning && pollCount < 90) {
+                    delay(1500)
+                    pollCount++
+                    val out = routerClient.getTraceOutput()
+                    if (out.isNotEmpty() && out != lastOutput) {
+                        lastOutput = out
+                        _uiState.update {
+                            it.copy(
+                                diagnosisState = it.diagnosisState.copy(
+                                    output = out
+                                )
+                            )
+                        }
+                    }
+                    val running = routerClient.isTraceRunning()
+                    if (!running) {
+                        break
+                    }
+                }
+                routerClient.stopTrace()
+                _uiState.update {
+                    it.copy(
+                        diagnosisState = it.diagnosisState.copy(
+                            isRunning = false
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun stopDiagnosis() {
+        val wasRunning = _uiState.value.diagnosisState.isRunning
+        _uiState.update {
+            it.copy(
+                diagnosisState = it.diagnosisState.copy(
+                    isRunning = false
+                )
+            )
+        }
+        diagnosisJob?.cancel()
+        diagnosisJob = null
+        if (wasRunning) {
+            viewModelScope.launch(Dispatchers.IO) {
+                routerClient.stopPing()
+                routerClient.stopTrace()
+            }
+        }
+    }
+
+    fun clearDiagnosisOutput() {
+        _uiState.update {
+            it.copy(
+                diagnosisState = it.diagnosisState.copy(
+                    output = "",
+                    error = null
+                )
+            )
+        }
+    }
+
     fun clearStatusMessage() {
         _uiState.update { it.copy(statusMessage = null) }
     }
 
     override fun onCleared() {
         pollJob?.cancel()
+        diagnosisJob?.cancel()
         super.onCleared()
     }
 }

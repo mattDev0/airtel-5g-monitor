@@ -145,6 +145,17 @@ fun MonitorDashboardScreen(
                 onSaveDns = { p, s -> viewModel.saveDns(p, s) }
             )
 
+            // Minimal Network Diagnosis Card (Ping & Traceroute)
+            NetworkDiagnosisCard(
+                diagnosisState = uiState.diagnosisState,
+                onModeChanged = { viewModel.setDiagnosisMode(it) },
+                onTargetChanged = { viewModel.setDiagnosisTarget(it) },
+                onPingTimesChanged = { viewModel.setDiagnosisPingTimes(it) },
+                onStart = { viewModel.startDiagnosis() },
+                onStop = { viewModel.stopDiagnosis() },
+                onClear = { viewModel.clearDiagnosisOutput() }
+            )
+
             // Minimal Connected Devices Fleet Section
             DeviceFleetSection(
                 devices = uiState.filteredDevices,

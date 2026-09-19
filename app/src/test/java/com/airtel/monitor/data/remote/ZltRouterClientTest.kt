@@ -31,10 +31,18 @@ class ZltRouterClientTest {
             handlers[if (method == null) "$cmd" else "$cmd:$method"] = reply
         }
 
+        /** Plain-text replies (e.g. cmd 204 file reads), keyed like [on]. */
+        val textHandlers = mutableMapOf<String, (JSONObject) -> String>()
+
+        fun onText(cmd: Int, method: String, reply: (JSONObject) -> String) {
+            textHandlers["$cmd:$method"] = reply
+        }
+
         override fun post(url: String, body: String, timeoutSeconds: Long): String {
             val req = JSONObject(body)
             requests += req
             val key = "${req.getInt("cmd")}:${req.optString("method")}"
+            textHandlers[key]?.let { return it(req) }
             val handler = handlers[key] ?: handlers["${req.getInt("cmd")}"]
                 ?: return JSONObject().put("success", true).toString()
             return handler(req).toString()
@@ -297,6 +305,61 @@ class ZltRouterClientTest {
         assertEquals("Unknown Device", wired.hostname)
         assertEquals("Ethernet (LAN)", wired.band)
         assertEquals(100, wired.signalPercent)
+    }
+
+    @Test
+    fun `startPing posts cmd 168 subcmd 0 with target and packet count`() {
+        router.on(168, "POST") { JSONObject().put("success", true) }
+
+        val res = client.startPing("8.8.8.8", pingTimes = 10)
+        assertTrue(res.isSuccess)
+
+        val pingReq = router.sent(168, "POST").last()
+        assertEquals(0, pingReq.getInt("subcmd"))
+        assertEquals(10, pingReq.getInt("pingTimes"))
+        assertEquals("8.8.8.8", pingReq.getString("url"))
+    }
+
+    @Test
+    fun `startTrace posts cmd 168 subcmd 2 with target`() {
+        router.on(168, "POST") { JSONObject().put("success", true) }
+
+        val res = client.startTrace("1.1.1.1")
+        assertTrue(res.isSuccess)
+
+        val traceReq = router.sent(168, "POST").last()
+        assertEquals(2, traceReq.getInt("subcmd"))
+        assertEquals("0", traceReq.getString("stopped"))
+        assertEquals("1.1.1.1", traceReq.getString("url"))
+    }
+
+    @Test
+    fun `isTraceRunning inspects cmd 168 GET subcmd 2 message`() {
+        router.on(168, "GET") { JSONObject().put("success", true).put("message", "1") }
+        assertTrue(client.isTraceRunning())
+
+        router.on(168, "GET") { JSONObject().put("success", true).put("message", "0") }
+        assertFalse(client.isTraceRunning())
+    }
+
+    @Test
+    fun `ping and trace output files are read with GET so lines stream in`() {
+        val partial = "PING 8.8.8.8 (8.8.8.8): 56 data bytes\n64 bytes from 8.8.8.8: seq=0 ttl=115 time=14.9 ms"
+        router.onText(204, "GET") { req ->
+            if (req.getString("url").endsWith("pingrt")) partial else "1  192.168.1.1  2.1ms"
+        }
+
+        assertEquals(partial, client.getPingOutput())
+        assertEquals("1  192.168.1.1  2.1ms", client.getTraceOutput())
+        assertTrue(router.sent(204, "POST").isEmpty())
+        assertEquals(listOf("/tmp/tzwww/pingrt", "/tmp/tzwww/tracepathrt"),
+            router.sent(204, "GET").map { it.getString("url") })
+    }
+
+    @Test
+    fun `a JSON status reply instead of file text is treated as no output yet`() {
+        router.onText(204, "GET") { """{"success":true,"cmd":204}""" }
+        assertEquals("", client.getPingOutput())
     }
 
     // ---- Fixtures ----

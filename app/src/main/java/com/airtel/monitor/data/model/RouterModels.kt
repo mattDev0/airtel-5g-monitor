@@ -122,6 +122,20 @@ data class WifiRadioConfig(
     val channel5g: String = ""
 )
 
+enum class DiagnosisMode {
+    PING,
+    TRACEROUTE
+}
+
+data class DiagnosisState(
+    val mode: DiagnosisMode = DiagnosisMode.PING,
+    val target: String = "8.8.8.8",
+    val pingTimes: Int = 4,
+    val isRunning: Boolean = false,
+    val output: String = "",
+    val error: String? = null
+)
+
 data class RouterState(
     val timestamp: Long = System.currentTimeMillis(),
     val timeFormatted: String = "",
