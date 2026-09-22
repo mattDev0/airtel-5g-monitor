@@ -8,7 +8,7 @@ public struct DashboardView: View {
     public init() {}
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 LiquidGlassBackground()
 
@@ -53,9 +53,8 @@ public struct DashboardView: View {
                     await viewModel.reloadAll()
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .navigationViewStyle(StackNavigationViewStyle())
         .sheet(isPresented: $showSettings) {
             SettingsSheetView()
         }

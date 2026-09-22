@@ -12,7 +12,7 @@ public struct SettingsSheetView: View {
     public init() {}
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Router Connection")) {
                     HStack {
@@ -53,7 +53,7 @@ public struct SettingsSheetView: View {
                     HStack {
                         Text("App Version")
                         Spacer()
-                        Text("2.0.2 (Native iOS)")
+                        Text("2.0.3 (Native iOS)")
                             .foregroundColor(.secondary)
                     }
                     HStack {
