@@ -38,14 +38,9 @@ On Android 16+, apps targeting SDK 37+ are blocked from private LAN addresses (e
 - Permission: `android.permission.ACCESS_LOCAL_NETWORK`
 - Declared in `AndroidManifest.xml` and requested at runtime in `MainActivity`.
 
-## Rollback Backup
-A full backup of the previous Chaquopy app is archived:
-- **Backup APK**: `backup/airtel_monitor_previous_chaquopy.apk`
-- **Git Branch**: `backup-chaquopy-version`
-- **To reinstall previous APK via ADB**:
-  ```powershell
-  & "C:\Users\amatt\AppData\Local\Android\Sdk\platform-tools\adb.exe" install -r "backup\airtel_monitor_previous_chaquopy.apk"
-  ```
+## Previous Version
+The earlier Chaquopy (embedded Python + WebView) app lives in the git history;
+its last commit is `140f576` (`git checkout 140f576`).
 
 ## Rebuild and Install from Command Line
 ```powershell

@@ -3,7 +3,7 @@
 Turns the monitor into a home-screen icon on Android. Tap it → the server
 starts on the phone and the dashboard opens in your browser. No laptop needed.
 
-**Requirement:** the phone must be on the router's Wi-Fi (Rengoku_5_GHz) so it
+**Requirement:** the phone must be on the router's Wi-Fi so it
 can reach 192.168.1.1.
 
 You copy two files to the phone:

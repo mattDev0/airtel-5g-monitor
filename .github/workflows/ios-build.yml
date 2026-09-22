@@ -16,7 +16,7 @@ on:
         type: boolean
         default: true
       release_tag:
-        description: 'Release tag (e.g. v2.0.0-ios)'
+        description: 'Release tag (default: v<MARKETING_VERSION>-ios)'
         required: false
         type: string
         default: 'v2.0.0-ios'
@@ -109,7 +109,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.inputs.release_tag || 'v2.0.0-ios' }}"
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Build/Products/Release-iphoneos/AirtelMonitor.app/Info.plist)-ios"
+          fi
           gh release create "$TAG" build/AirtelMonitor.ipa \
             --title "Airtel 5G Monitor for iOS ($TAG)" \
             --notes "Native SwiftUI iOS companion build for Airtel 5G (ZLT X17M / W304VA PRO). Installable via AltStore, SideStore, Sideloadly, or TrollStore." \

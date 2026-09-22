@@ -378,6 +378,6 @@ class ZltRouterClientTest {
         .put("success", true).put("cmd", cmd)
         .put("wifiOpen", if (on) "1" else "0")
         .put("broadcast", "1").put("wifiSames", "0").put("authenticationType", "2")
-        .put("ssid", if (cmd == 2) "QWlydGVsX1czMDRWQSBQUk9fMDUyMA==" else "UmVuZ29rdV81X0dIeg==")
+        .put("ssid", if (cmd == 2) "QWlydGVsXzVHXzIuNEdIeg==" else "QWlydGVsXzVHXzVHSHo=")
         .put("key", "placeholder-key")
 }

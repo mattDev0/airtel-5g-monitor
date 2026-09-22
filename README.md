@@ -6,15 +6,15 @@ internal CGI (`/cgi-bin/http.cgi`) using the challenge-token SHA-256 login, and
 shows live WAN throughput, connected devices, 5G/4G radio stats, and a read-only
 cell-lock panel — plus router reboot.
 
-Ships in three forms, all from one shared Python core (standard library only, no
-pip dependencies):
+Ships in four forms. The desktop and Termux versions share one Python core
+(standard library only, no pip dependencies); the phone apps are native ports.
 
 | Form | Where | Run it |
 |------|-------|--------|
 | **Desktop** | `desktop/` | `python desktop/server.py` (or `start_monitor.bat`), open `http://127.0.0.1:8080` |
 | **Single-file / Termux** | `mobile/airtel_monitor.py` | copy to phone, run in Pydroid 3 / Termux |
-| **Android app** | `app/` (Native Kotlin Compose) | build in Android Studio → installable APK |
-| **iOS app** | `iosApp/` (Native SwiftUI) | GitHub Actions runner → installable IPA (SideStore/AltStore) |
+| **Android app** | `app/` (native Kotlin + Compose) | APK from Releases, or build in Android Studio ([docs](docs/ANDROID_BUILD.md)) |
+| **iOS app** | `iosApp/` (native SwiftUI) | IPA from Releases, sideload with SideStore/AltStore/Sideloadly ([docs](docs/IOS_BUILD.md)) |
 
 ## Layout
 ```
@@ -22,8 +22,7 @@ desktop/          Laptop app: server.py, router_client.py, static/ (web UI)
 mobile/           Single-file bundle + Termux launcher + phone setup guide
 app/              Native Android app (Kotlin + Jetpack Compose + OkHttp)
 iosApp/           Native iOS app (Swift + SwiftUI + URLSession + CryptoKit)
-tools/            build_mobile.py — regenerates the single-file mobile bundle
-backup/           Archived copy of previous Chaquopy APK (airtel_monitor_previous_chaquopy.apk)
+tools/            build_mobile.py (single-file mobile bundle), gen_icon.py (app icons)
 docs/             ANDROID_BUILD.md + IOS_BUILD.md + ANDROID_NOTES.md
 ```
 
@@ -36,8 +35,8 @@ the desktop sources, regenerate them:
 python tools/build_mobile.py
 ```
 
-This rewrites `mobile/airtel_monitor.py` (binds `0.0.0.0`) and
-`app/src/main/python/airtel_monitor.py` (binds `127.0.0.1` for the WebView).
+This rewrites `mobile/airtel_monitor.py` (binds `0.0.0.0`). The Android and iOS
+apps don't use it; they reimplement the client natively.
 
 ## What works and what doesn't (this firmware)
 - ✅ Live **total** WAN download/upload (from the router's `cmd 18` byte counters).
@@ -51,10 +50,20 @@ This rewrites `mobile/airtel_monitor.py` (binds `0.0.0.0`) and
   writes (`LIMITED_ACCESS`), so they were removed rather than shown broken.
 
 ## Android
-Targets **Android 17 (SDK 37)** via Chaquopy 17. See **`docs/ANDROID_NOTES.md`** for
-the three things that will bite you (config-cache vs Chaquopy, the
-`ACCESS_LOCAL_NETWORK` permission, and the WebChromeClient dialog quirk).
+Native Kotlin + Jetpack Compose, targets **Android 17 (SDK 37)**, min Android 7.0.
+Build steps: **`docs/ANDROID_BUILD.md`**. Architecture and the Android 16+
+`ACCESS_LOCAL_NETWORK` permission: **`docs/ANDROID_NOTES.md`**.
+
+## iOS
+Native SwiftUI, iOS 16+. Built unsigned by GitHub Actions (no Mac needed); install
+steps in **`docs/IOS_BUILD.md`**.
 
 ## Note
-Uses the router's default LAN credentials (`root`/`admin`). Intended for use on
-your own network only.
+Uses the router's default LAN credentials (`root`/`admin`), changeable in the app
+settings. Intended for use on your own network only.
+
+This is an independent hobby project. It is not affiliated with or endorsed by
+Airtel or ZLT; product names are used only to say which hardware it works with.
+
+## License
+[MIT](LICENSE)
