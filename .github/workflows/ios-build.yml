@@ -79,6 +79,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             clean build
 
+      - name: Verify Info.plist
+        run: |
+          # Without a launch screen key iOS runs the app letterboxed (legacy mode).
+          PLIST=build/Build/Products/Release-iphoneos/AirtelMonitor.app/Info.plist
+          for key in UILaunchStoryboardName NSLocalNetworkUsageDescription NSAppTransportSecurity; do
+            /usr/libexec/PlistBuddy -c "Print :$key" "$PLIST" > /dev/null || { echo "::error::$key missing from built Info.plist"; exit 1; }
+          done
+          echo "Version: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST"))"
+
       - name: Package IPA
         run: |
           mkdir -p build/Payload
