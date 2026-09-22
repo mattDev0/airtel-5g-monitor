@@ -110,8 +110,8 @@ public actor ZltRouterClient {
 
             // 2. Compute SHA256(token + password)
             let pwdHash = sha256(token + settingsStore.password)
-            let newSessionId = UUID().uuidString.replacingOccurrences(of: "-", with "") +
-                               UUID().uuidString.replacingOccurrences(of: "-", with "")
+            let newSessionId = UUID().uuidString.replacingOccurrences(of: "-", with: "") +
+                               UUID().uuidString.replacingOccurrences(of: "-", with: "")
 
             // 3. Post authentication (cmd 100)
             let loginPayload: [String: Any] = [
