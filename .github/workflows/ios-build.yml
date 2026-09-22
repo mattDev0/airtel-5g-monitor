@@ -1,0 +1,87 @@
+name: Build iOS IPA
+
+on:
+  push:
+    paths:
+      - 'iosApp/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    paths:
+      - 'iosApp/**'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish as a GitHub Release'
+        required: false
+        type: boolean
+        default: true
+      release_tag:
+        description: 'Release tag (e.g. v2.0.0-ios)'
+        required: false
+        type: string
+        default: 'v2.0.0-ios'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    name: Build Native iOS App
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+
+      - name: Generate Xcode Project
+        working-directory: iosApp
+        run: |
+          xcodegen generate
+
+      - name: Build Application for Device
+        run: |
+          xcodebuild -project iosApp/AirtelMonitor.xcodeproj \
+            -scheme AirtelMonitor \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+      - name: Package IPA
+        run: |
+          mkdir -p build/Payload
+          cp -r build/Build/Products/Release-iphoneos/AirtelMonitor.app build/Payload/
+          cd build
+          zip -r -q AirtelMonitor.ipa Payload
+          echo "IPA Size:"
+          ls -lh AirtelMonitor.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirtelMonitor-iOS-IPA
+          path: build/AirtelMonitor.ipa
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.create_release == 'true' || github.event_name == 'release' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.release_tag || 'v2.0.0-ios' }}"
+          gh release create "$TAG" build/AirtelMonitor.ipa \
+            --title "Airtel 5G Monitor for iOS ($TAG)" \
+            --notes "Native SwiftUI iOS companion build for Airtel 5G (ZLT X17M / W304VA PRO). Installable via AltStore, SideStore, Sideloadly, or TrollStore." \
+            --draft=false \
+            --prerelease=false || gh release upload "$TAG" build/AirtelMonitor.ipa --clobber
