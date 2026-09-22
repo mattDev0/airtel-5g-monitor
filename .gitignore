@@ -25,7 +25,11 @@ desktop/device_aliases.json
 # --- IDE ---
 /.idea/
 
-# --- Local APK backups and build outputs (never commit binaries) ---
+# --- Local APK/IPA backups and build outputs (never commit binaries) ---
 /apk_backup/
 /backup/
 *.apk
+*.ipa
+/build_artifacts/
+iosApp/*.xcodeproj/
+iosApp/*.xcworkspace/
