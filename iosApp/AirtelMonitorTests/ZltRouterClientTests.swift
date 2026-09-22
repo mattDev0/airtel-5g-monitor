@@ -108,4 +108,15 @@ final class ZltRouterClientTests: XCTestCase {
         diag.mode = .traceroute
         XCTAssertEqual(diag.mode.rawValue, "Traceroute")
     }
+
+    func testDnsConfigModel() {
+        let dns = DnsConfig(primary: "1.1.1.1", secondary: "1.0.0.1", dhcpEnabled: true)
+        XCTAssertEqual(dns.primary, "1.1.1.1")
+        XCTAssertEqual(dns.secondary, "1.0.0.1")
+        XCTAssertTrue(dns.dhcpEnabled)
+
+        let emptyDns = DnsConfig()
+        XCTAssertEqual(emptyDns.primary, "")
+        XCTAssertEqual(emptyDns.secondary, "")
+    }
 }

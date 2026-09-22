@@ -20,11 +20,10 @@ public struct DeviceFleetView: View {
                     .fontWeight(.bold)
 
                 Text("\(viewModel.state.devices.count)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.15))
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.accentColor.opacity(0.18))
                     .foregroundColor(.accentColor)
                     .clipShape(Capsule())
 
@@ -47,10 +46,7 @@ public struct DeviceFleetView: View {
                 }
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .liquidGlassCard()
         .alert("Rename Device", isPresented: Binding(
             get: { selectedDeviceForAlias != nil },
             set: { if !$0 { selectedDeviceForAlias = nil } }
@@ -79,11 +75,10 @@ private struct DeviceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: device.type.sfSymbol)
-                .font(.system(size: 18))
+                .font(.system(size: 16))
                 .foregroundColor(.accentColor)
-                .frame(width: 32, height: 32)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(Circle())
+                .frame(width: 34, height: 34)
+                .liquidGlassPill()
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -100,12 +95,12 @@ private struct DeviceRow: View {
 
                     if device.isRouter {
                         Text("GATEWAY")
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.orange.opacity(0.2))
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.25))
                             .foregroundColor(.orange)
-                            .cornerRadius(4)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     }
                 }
 
@@ -144,9 +139,8 @@ private struct DeviceRow: View {
                 }
             }
         }
-        .padding(8)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(8)
+        .padding(10)
+        .liquidGlassPill()
         .contentShape(Rectangle())
         .onTapGesture {
             onRename()

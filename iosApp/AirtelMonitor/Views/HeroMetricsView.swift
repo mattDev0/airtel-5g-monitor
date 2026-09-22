@@ -65,15 +65,15 @@ public struct HeroMetricsView: View {
                         .foregroundColor(.primary)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .liquidGlassPill()
         }
     }
 }
 
 private struct SpeedCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let speed: Double
     let unit: String
@@ -87,6 +87,7 @@ private struct SpeedCard: View {
                 Image(systemName: icon)
                     .foregroundColor(accentColor)
                     .font(.subheadline)
+                    .shadow(color: accentColor.opacity(0.5), radius: 4)
                 Text(title)
                     .font(.caption2)
                     .fontWeight(.bold)
@@ -96,7 +97,7 @@ private struct SpeedCard: View {
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(String(format: "%.2f", speed))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
                 Text(unit)
                     .font(.caption)
@@ -110,10 +111,41 @@ private struct SpeedCard: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.04))
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: colorScheme == .dark ? [
+                            Color.white.opacity(0.3),
+                            accentColor.opacity(0.2),
+                            Color.white.opacity(0.08)
+                        ] : [
+                            Color.white.opacity(0.9),
+                            accentColor.opacity(0.3),
+                            Color.white.opacity(0.5)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(
+            color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05),
+            radius: 12,
+            x: 0,
+            y: 5
+        )
     }
 }

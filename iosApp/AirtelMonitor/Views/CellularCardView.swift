@@ -23,7 +23,7 @@ public struct CellularCardView: View {
                 Spacer()
 
                 if cellular.signalLvl > 0 {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 4) {
                         Image(systemName: "cellularbars", variableValue: Double(cellular.signalLvl) / 5.0)
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.primary)
@@ -31,10 +31,9 @@ public struct CellularCardView: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.secondary)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(6)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .liquidGlassPill()
                 }
 
                 Text(cellular.networkType)
@@ -42,16 +41,20 @@ public struct CellularCardView: View {
                     .fontWeight(.bold)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.15))
+                    .background(Color.accentColor.opacity(0.18))
                     .foregroundColor(.accentColor)
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 Button {
-                    withAnimation { isExpanded.toggle() }
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        isExpanded.toggle()
+                    }
                 } label: {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.secondary)
+                        .frame(width: 26, height: 26)
+                        .liquidGlassPill()
                 }
             }
 
@@ -65,6 +68,7 @@ public struct CellularCardView: View {
 
             if isExpanded {
                 Divider()
+                    .opacity(0.4)
 
                 VStack(spacing: 8) {
                     DetailRow(label: "Carrier", value: cellular.operatorName)
@@ -84,12 +88,11 @@ public struct CellularCardView: View {
                             .foregroundColor(cellLock.nrLockEnabled || cellLock.lteLockEnabled ? .orange : .green)
                     }
                 }
+                .padding(10)
+                .liquidGlassPill()
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .liquidGlassCard()
     }
 }
 
@@ -99,7 +102,7 @@ private struct MetricPill: View {
     let unit: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.secondary)
@@ -116,8 +119,7 @@ private struct MetricPill: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(8)
+        .liquidGlassPill()
     }
 }
 
@@ -138,3 +140,4 @@ private struct DetailRow: View {
         }
     }
 }
+

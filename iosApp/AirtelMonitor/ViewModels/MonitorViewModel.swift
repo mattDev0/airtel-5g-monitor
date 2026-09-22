@@ -98,13 +98,12 @@ public final class MonitorViewModel: ObservableObject {
         defer { isDnsLoading = false }
 
         let result = await client.setDns(primary: primary, secondary: secondary)
+        await loadDns()
         switch result {
         case .success(let msg):
             dnsStatusMessage = msg
-            await loadDns()
         case .failure(let error):
             dnsStatusMessage = "Error: \(error.localizedDescription)"
-            await loadDns()
         }
     }
 

@@ -51,6 +51,9 @@ public struct DiagnosisCardView: View {
                 if viewModel.diagnosisState.mode == .ping {
                     Stepper("\(viewModel.diagnosisState.pingCount)x", value: $viewModel.diagnosisState.pingCount, in: 1...20)
                         .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .liquidGlassPill()
                         .disabled(viewModel.diagnosisState.isRunning)
                 }
             }
@@ -70,10 +73,10 @@ public struct DiagnosisCardView: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 10)
                 .background(viewModel.diagnosisState.isRunning ? Color.red : Color.accentColor)
                 .foregroundColor(.white)
-                .cornerRadius(8)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .disabled(viewModel.diagnosisState.target.trimmingCharacters(in: .whitespaces).isEmpty)
 
@@ -86,12 +89,16 @@ public struct DiagnosisCardView: View {
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(Color.green)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(10)
+                                .padding(12)
                                 .id("bottom")
                         }
                         .frame(height: 160)
-                        .background(Color.black.opacity(0.92))
-                        .cornerRadius(8)
+                        .background(Color.black.opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
+                        )
                         .simultaneousGesture(
                             DragGesture()
                                 .onChanged { value in
@@ -142,9 +149,6 @@ public struct DiagnosisCardView: View {
                 }
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .liquidGlassCard()
     }
 }

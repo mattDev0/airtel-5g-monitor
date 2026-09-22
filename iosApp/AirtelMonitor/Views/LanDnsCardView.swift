@@ -61,7 +61,7 @@ public struct LanDnsCardView: View {
                         .keyboardType(.numbersAndPunctuation)
 
                     // Presets
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         PresetPill(name: "Cloudflare") {
                             primaryDns = "1.1.1.1"
                             secondaryDns = "1.0.0.1"
@@ -86,16 +86,16 @@ public struct LanDnsCardView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 10)
                         .background(Color.accentColor)
                         .foregroundColor(.white)
-                        .cornerRadius(8)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .disabled(viewModel.isDnsLoading || primaryDns.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } else {
                 if viewModel.isDnsLoaded {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         DnsReadout(label: "Primary DNS", value: viewModel.dnsConfig.primary.isEmpty ? "Router Default (DHCP)" : viewModel.dnsConfig.primary)
                         DnsReadout(label: "Secondary DNS", value: viewModel.dnsConfig.secondary.isEmpty ? "None" : viewModel.dnsConfig.secondary)
                     }
@@ -109,21 +109,25 @@ public struct LanDnsCardView: View {
                         Spacer()
                     }
                     .padding(10)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(8)
+                    .liquidGlassPill()
                 }
             }
 
             if let msg = viewModel.dnsStatusMessage {
-                Text(msg)
-                    .font(.caption2)
-                    .foregroundColor(msg.contains("Error") ? .red : .secondary)
+                HStack(spacing: 6) {
+                    Image(systemName: msg.contains("Error") || msg.contains("kept") ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        .foregroundColor(msg.contains("Error") || msg.contains("kept") ? .orange : .green)
+                    Text(msg)
+                        .font(.caption2)
+                        .foregroundColor(.primary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .liquidGlassPill()
+                .padding(.top, 2)
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .liquidGlassCard()
         .onAppear {
             if !viewModel.isDnsLoaded {
                 Task { await viewModel.loadDns() }
@@ -150,11 +154,10 @@ private struct PresetPill: View {
     var body: some View {
         Button(action: action) {
             Text(name)
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(6)
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .liquidGlassPill()
         }
     }
 }
@@ -164,17 +167,19 @@ private struct DnsReadout: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(label)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.secondary)
             Text(value)
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                 .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(8)
+        .padding(10)
+        .liquidGlassPill()
     }
 }
+

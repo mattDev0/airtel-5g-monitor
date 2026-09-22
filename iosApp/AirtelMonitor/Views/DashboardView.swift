@@ -10,25 +10,29 @@ public struct DashboardView: View {
     public var body: some View {
         NavigationView {
             ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+                LiquidGlassBackground()
 
                 ScrollView {
                     VStack(spacing: 16) {
                         HeaderBarView(viewModel: viewModel, showSettings: $showSettings)
+                            .padding(.horizontal)
+                            .padding(.top, 4)
 
                         if let err = viewModel.errorMessage, !viewModel.isConnected {
-                            HStack {
+                            HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(.red)
                                 Text(err)
                                     .font(.caption)
-                                    .foregroundColor(.red)
+                                    .foregroundColor(.primary)
                                 Spacer()
                             }
-                            .padding(10)
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(8)
+                            .padding(12)
+                            .liquidGlassPill()
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.red.opacity(0.4), lineWidth: 1)
+                            )
                             .padding(.horizontal)
                         }
 

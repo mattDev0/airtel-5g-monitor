@@ -39,8 +39,6 @@ public struct WifiRadiosCardView: View {
                     confirmToggle(band: "2.4 GHz", newValue: newValue)
                 }
 
-                Divider()
-
                 // 5 GHz Radio
                 RadioRow(
                     label: "5 GHz Wi-Fi (Wi-Fi 6)",
@@ -60,10 +58,7 @@ public struct WifiRadiosCardView: View {
                     .padding(.top, 2)
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .liquidGlassCard()
         .alert("Toggle Wi-Fi Radio?", isPresented: $showConfirmToggle) {
             Button("Cancel", role: .cancel) { }
             Button(targetToggleValue ? "Turn On" : "Turn Off", role: targetToggleValue ? .none : .destructive) {
@@ -127,5 +122,8 @@ private struct RadioRow: View {
             .labelsHidden()
             .disabled(isLoading)
         }
+        .padding(10)
+        .liquidGlassPill()
     }
 }
+

@@ -53,7 +53,7 @@ public struct SettingsSheetView: View {
                     HStack {
                         Text("App Version")
                         Spacer()
-                        Text("2.0.0 (Native iOS)")
+                        Text("2.0.2 (Native iOS)")
                             .foregroundColor(.secondary)
                     }
                     HStack {
