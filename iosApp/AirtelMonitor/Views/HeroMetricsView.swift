@@ -67,13 +67,12 @@ public struct HeroMetricsView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .liquidGlassPill()
+            .liquidGlassPanel()
         }
     }
 }
 
 private struct SpeedCard: View {
-    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let speed: Double
     let unit: String
@@ -111,41 +110,7 @@ private struct SpeedCard: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.04))
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: colorScheme == .dark ? [
-                            Color.white.opacity(0.3),
-                            accentColor.opacity(0.2),
-                            Color.white.opacity(0.08)
-                        ] : [
-                            Color.white.opacity(0.9),
-                            accentColor.opacity(0.3),
-                            Color.white.opacity(0.5)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(
-            color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05),
-            radius: 12,
-            x: 0,
-            y: 5
-        )
+        .liquidGlassCard(tint: accentColor)
     }
 }

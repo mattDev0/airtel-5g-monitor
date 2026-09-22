@@ -73,11 +73,8 @@ public struct DiagnosisCardView: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(viewModel.diagnosisState.isRunning ? Color.red : Color.accentColor)
-                .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            .liquidGlassActionButton(tint: viewModel.diagnosisState.isRunning ? .red : .accentColor)
             .disabled(viewModel.diagnosisState.target.trimmingCharacters(in: .whitespaces).isEmpty)
 
             // Terminal Console

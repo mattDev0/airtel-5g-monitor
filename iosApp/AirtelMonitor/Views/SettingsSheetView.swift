@@ -53,7 +53,7 @@ public struct SettingsSheetView: View {
                     HStack {
                         Text("App Version")
                         Spacer()
-                        Text("2.0.3 (Native iOS)")
+                        Text(appVersion)
                             .foregroundColor(.secondary)
                     }
                     HStack {
@@ -92,5 +92,12 @@ public struct SettingsSheetView: View {
         settingsStore.username = user.trimmingCharacters(in: .whitespaces)
         settingsStore.password = pass
         settingsStore.pollIntervalSeconds = interval
+    }
+
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
     }
 }

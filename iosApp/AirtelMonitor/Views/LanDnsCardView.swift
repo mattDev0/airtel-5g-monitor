@@ -86,11 +86,8 @@ public struct LanDnsCardView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
+                    .liquidGlassActionButton()
                     .disabled(viewModel.isDnsLoading || primaryDns.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } else {
@@ -155,10 +152,8 @@ private struct PresetPill: View {
         Button(action: action) {
             Text(name)
                 .font(.system(size: 11, weight: .semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .liquidGlassPill()
         }
+        .liquidGlassSmallButton()
     }
 }
 

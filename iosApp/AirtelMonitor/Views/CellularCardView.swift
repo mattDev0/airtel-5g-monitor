@@ -53,9 +53,8 @@ public struct CellularCardView: View {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.secondary)
-                        .frame(width: 26, height: 26)
-                        .liquidGlassPill()
                 }
+                .liquidGlassSmallButton()
             }
 
             // Radio Grid
