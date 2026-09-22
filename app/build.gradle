@@ -10,7 +10,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.airtel.monitor"
+        applicationId "dev.mattdev0.airtelmonitor"
         minSdk 24
         targetSdk 37
         versionCode 1

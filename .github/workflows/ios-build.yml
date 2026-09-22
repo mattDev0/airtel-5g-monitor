@@ -57,6 +57,16 @@ jobs:
         run: |
           xcodegen generate
 
+      - name: Run Unit Tests
+        run: |
+          DEST=$(xcrun simctl list devices available | grep -m 1 "iPhone" | sed -E 's/.*\(([A-F0-9-]+)\).*/\1/')
+          echo "Using Simulator ID: $DEST"
+          xcodebuild test \
+            -project iosApp/AirtelMonitor.xcodeproj \
+            -scheme AirtelMonitor \
+            -destination "id=$DEST" \
+            -derivedDataPath build_test
+
       - name: Build Application for Device
         run: |
           xcodebuild -project iosApp/AirtelMonitor.xcodeproj \

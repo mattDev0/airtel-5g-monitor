@@ -23,12 +23,13 @@ public actor ZltRouterClient {
     public private(set) var peakUlMbps: Double = 0.0
 
     private let session: URLSession
+    private var loginTask: Task<Bool, Never>?
 
     public init(settingsStore: SettingsStore = .shared) {
         self.settingsStore = settingsStore
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 5.0
-        config.timeoutIntervalForResource = 6.0
+        config.timeoutIntervalForRequest = 25.0
+        config.timeoutIntervalForResource = 35.0
         config.waitsForConnectivity = false
         self.session = URLSession(configuration: config)
     }
@@ -96,6 +97,19 @@ public actor ZltRouterClient {
     }
 
     public func login() async -> Bool {
+        if let inFlight = loginTask {
+            return await inFlight.value
+        }
+        let task = Task { [self] () -> Bool in
+            await performLogin()
+        }
+        loginTask = task
+        let result = await task.value
+        loginTask = nil
+        return result
+    }
+
+    private func performLogin() async -> Bool {
         do {
             // 1. Fetch challenge token via GET_NEXT_LOGIN_TIME (cmd 232)
             let tokenPayload: [String: Any] = [
@@ -414,7 +428,14 @@ public actor ZltRouterClient {
         let netTypeRaw = (sysStatus["network_type_str"] as? String) ?? (dash["network_type_str"] as? String) ?? ""
         let netType = (netTypeRaw.isEmpty || netTypeRaw == "null") ? "-" : netTypeRaw
 
-        let signalLvl = (sysStatus["signal_lvl"] as? Int) ?? (dash["signal_lvl"] as? Int) ?? 0
+        func parseSignalLevel(_ dict: [String: Any]) -> Int {
+            if let lvl = dict["signal_lvl"] as? Int { return lvl }
+            if let str = dict["signal_lvl"] as? String, let lvl = Int(str.trimmingCharacters(in: .whitespaces)) { return lvl }
+            return 0
+        }
+        let sysLvl = parseSignalLevel(sysStatus)
+        let dashLvl = parseSignalLevel(dash)
+        let signalLvl = sysLvl != 0 ? sysLvl : dashLvl
 
         let cellular = CellularMetrics(
             networkType: netType,
@@ -523,7 +544,7 @@ public actor ZltRouterClient {
         "ipv6_startIp", "ipv6_endIp", "ipv6_main_dns", "ipv6_vice_dns"
     ]
 
-    private func isIpv4(_ value: String) -> Bool {
+    internal static func isIpv4(_ value: String) -> Bool {
         let parts = value.split(separator: ".")
         guard parts.count == 4 else { return false }
         for p in parts {
@@ -535,13 +556,13 @@ public actor ZltRouterClient {
 
     public func getDns() async -> (Bool, DnsConfig) {
         let res = await query(cmdId: 3)
-        guard res["success"] as? Bool != false else {
+        guard res["success"] as? Bool == true, let mainDns = res["main_dns"] as? String else {
             return (false, DnsConfig())
         }
         return (
             true,
             DnsConfig(
-                primary: res["main_dns"] as? String ?? "",
+                primary: mainDns,
                 secondary: res["vice_dns"] as? String ?? "",
                 dhcpEnabled: "\(res["dhcpServer"] ?? "")" == "1"
             )
@@ -552,10 +573,10 @@ public actor ZltRouterClient {
         let p = primary.trimmingCharacters(in: .whitespaces)
         let s = secondary.trimmingCharacters(in: .whitespaces)
 
-        guard isIpv4(p) else {
+        guard Self.isIpv4(p) else {
             return .failure(NSError(domain: "AirtelMonitor", code: 1, userInfo: [NSLocalizedDescriptionKey: "Primary DNS must be a valid IPv4 address"]))
         }
-        if !s.isEmpty && !isIpv4(s) {
+        if !s.isEmpty && !Self.isIpv4(s) {
             return .failure(NSError(domain: "AirtelMonitor", code: 2, userInfo: [NSLocalizedDescriptionKey: "Secondary DNS must be a valid IPv4 address or blank"]))
         }
         if p == s {
@@ -563,7 +584,7 @@ public actor ZltRouterClient {
         }
 
         let current = await query(cmdId: 3)
-        guard current["success"] as? Bool != false else {
+        guard current["success"] as? Bool == true else {
             let msg = current["message"] as? String ?? "Could not read LAN settings"
             return .failure(NSError(domain: "AirtelMonitor", code: 4, userInfo: [NSLocalizedDescriptionKey: msg]))
         }
@@ -591,13 +612,19 @@ public actor ZltRouterClient {
             return .failure(NSError(domain: "AirtelMonitor", code: 6, userInfo: [NSLocalizedDescriptionKey: msg]))
         }
 
+        var lastRead: DnsConfig? = nil
         for _ in 0..<8 {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             let (ok, check) = await getDns()
             if !ok { continue }
+            lastRead = check
             if check.primary == p && check.secondary == s {
                 return .success("DNS updated and confirmed by router")
             }
+        }
+        if let last = lastRead {
+            let kept = "\(last.primary) / \(last.secondary.isEmpty ? "router" : last.secondary)"
+            return .failure(NSError(domain: "AirtelMonitor", code: 7, userInfo: [NSLocalizedDescriptionKey: "Router accepted the save but kept \(kept)"]))
         }
         return .success("DNS saved, but router confirmation is pending. Check reload shortly.")
     }
@@ -700,15 +727,20 @@ public actor ZltRouterClient {
             return .failure(NSError(domain: "AirtelMonitor", code: 13, userInfo: [NSLocalizedDescriptionKey: msg]))
         }
 
+        var lastRead: Bool? = nil
         for _ in 0..<10 {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             if let now = await isBandEnabled(cmd: cmd) {
+                lastRead = now
                 if now == enabled {
                     return .success("\(label) Wi-Fi turned \(stateStr), confirmed by router")
                 }
             }
         }
-        return .failure(NSError(domain: "AirtelMonitor", code: 14, userInfo: [NSLocalizedDescriptionKey: "Sent, but the router did not answer verification. If this phone was on \(label), reconnect and refresh."]))
+        if let last = lastRead {
+            return .failure(NSError(domain: "AirtelMonitor", code: 14, userInfo: [NSLocalizedDescriptionKey: "Router kept \(label) Wi-Fi \(last ? "on" : "off")"]))
+        }
+        return .failure(NSError(domain: "AirtelMonitor", code: 15, userInfo: [NSLocalizedDescriptionKey: "Sent, but the router did not answer verification. If this phone was on \(label), reconnect and refresh."]))
     }
 
     // MARK: - Network Diagnosis (Ping & Traceroute)

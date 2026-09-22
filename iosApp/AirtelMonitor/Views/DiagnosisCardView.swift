@@ -80,20 +80,63 @@ public struct DiagnosisCardView: View {
             // Terminal Console
             if !viewModel.diagnosisState.output.isEmpty {
                 ScrollViewReader { proxy in
-                    ScrollView(.vertical) {
-                        Text(viewModel.diagnosisState.output)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(Color.green)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(10)
-                            .id("bottom")
+                    ZStack(alignment: .bottomTrailing) {
+                        ScrollView(.vertical) {
+                            Text(viewModel.diagnosisState.output)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(Color.green)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .id("bottom")
+                        }
+                        .frame(height: 160)
+                        .background(Color.black.opacity(0.92))
+                        .cornerRadius(8)
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    // Dragging down scrolls up toward earlier terminal lines
+                                    if value.translation.height > 8 {
+                                        followOutput = false
+                                    }
+                                }
+                        )
+
+                        if !followOutput && viewModel.diagnosisState.isRunning {
+                            Button {
+                                followOutput = true
+                                withAnimation {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle.fill")
+                                    Text("Auto-scroll paused")
+                                }
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.85))
+                                .foregroundColor(.yellow)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule().stroke(Color.yellow.opacity(0.5), lineWidth: 1)
+                                )
+                                .shadow(radius: 2)
+                            }
+                            .padding(8)
+                        }
                     }
-                    .frame(height: 160)
-                    .background(Color.black.opacity(0.92))
-                    .cornerRadius(8)
                     .onChange(of: viewModel.diagnosisState.output) { _ in
-                        withAnimation {
-                            proxy.scrollTo("bottom", anchor: .bottom)
+                        if followOutput {
+                            withAnimation {
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onChange(of: viewModel.diagnosisState.isRunning) { isRunning in
+                        if isRunning {
+                            followOutput = true
                         }
                     }
                 }

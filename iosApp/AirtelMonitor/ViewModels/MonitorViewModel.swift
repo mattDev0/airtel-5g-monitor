@@ -12,6 +12,7 @@ public final class MonitorViewModel: ObservableObject {
     // DNS state
     @Published public var dnsConfig: DnsConfig = DnsConfig()
     @Published public var isDnsLoading: Bool = false
+    @Published public var isDnsLoaded: Bool = false
     @Published public var dnsStatusMessage: String? = nil
 
     // Wi-Fi state
@@ -83,6 +84,11 @@ public final class MonitorViewModel: ObservableObject {
         let (ok, config) = await client.getDns()
         if ok {
             self.dnsConfig = config
+            self.isDnsLoaded = true
+            self.dnsStatusMessage = nil
+        } else {
+            self.isDnsLoaded = false
+            self.dnsStatusMessage = "Could not read LAN DNS settings from router"
         }
     }
 
@@ -98,6 +104,7 @@ public final class MonitorViewModel: ObservableObject {
             await loadDns()
         case .failure(let error):
             dnsStatusMessage = "Error: \(error.localizedDescription)"
+            await loadDns()
         }
     }
 

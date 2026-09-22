@@ -22,6 +22,21 @@ public struct CellularCardView: View {
                     .fontWeight(.bold)
                 Spacer()
 
+                if cellular.signalLvl > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "cellularbars", variableValue: Double(cellular.signalLvl) / 5.0)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("\(cellular.signalLvl)/5")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(6)
+                }
+
                 Text(cellular.networkType)
                     .font(.caption2)
                     .fontWeight(.bold)

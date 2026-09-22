@@ -25,13 +25,19 @@ public struct LanDnsCardView: View {
                 if viewModel.isDnsLoading {
                     ProgressView()
                         .scaleEffect(0.8)
-                } else {
+                } else if viewModel.isDnsLoaded {
                     Button(isEditing ? "Done" : "Edit") {
                         if !isEditing {
                             primaryDns = viewModel.dnsConfig.primary
                             secondaryDns = viewModel.dnsConfig.secondary
                         }
                         isEditing.toggle()
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                } else {
+                    Button("Retry") {
+                        Task { await viewModel.loadDns() }
                     }
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -88,9 +94,23 @@ public struct LanDnsCardView: View {
                     .disabled(viewModel.isDnsLoading || primaryDns.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } else {
-                HStack(spacing: 12) {
-                    DnsReadout(label: "Primary DNS", value: viewModel.dnsConfig.primary.isEmpty ? "Router Default (DHCP)" : viewModel.dnsConfig.primary)
-                    DnsReadout(label: "Secondary DNS", value: viewModel.dnsConfig.secondary.isEmpty ? "None" : viewModel.dnsConfig.secondary)
+                if viewModel.isDnsLoaded {
+                    HStack(spacing: 12) {
+                        DnsReadout(label: "Primary DNS", value: viewModel.dnsConfig.primary.isEmpty ? "Router Default (DHCP)" : viewModel.dnsConfig.primary)
+                        DnsReadout(label: "Secondary DNS", value: viewModel.dnsConfig.secondary.isEmpty ? "None" : viewModel.dnsConfig.secondary)
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                        Text(viewModel.isDnsLoading ? "Reading router DNS..." : "Unable to read DNS from router")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(8)
                 }
             }
 
@@ -105,7 +125,7 @@ public struct LanDnsCardView: View {
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
         .onAppear {
-            if viewModel.dnsConfig.primary.isEmpty {
+            if !viewModel.isDnsLoaded {
                 Task { await viewModel.loadDns() }
             }
         }
