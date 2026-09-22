@@ -19,7 +19,6 @@ on:
         description: 'Release tag (default: v<MARKETING_VERSION>-ios)'
         required: false
         type: string
-        default: 'v2.0.0-ios'
 
 permissions:
   contents: write
