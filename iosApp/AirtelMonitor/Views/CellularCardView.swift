@@ -3,11 +3,13 @@ import SwiftUI
 public struct CellularCardView: View {
     public let cellular: CellularMetrics
     public let cellLock: CellLockInfo
+    public var onEditLocks: (() -> Void)?
     @State private var isExpanded: Bool = false
 
-    public init(cellular: CellularMetrics, cellLock: CellLockInfo) {
+    public init(cellular: CellularMetrics, cellLock: CellLockInfo, onEditLocks: (() -> Void)? = nil) {
         self.cellular = cellular
         self.cellLock = cellLock
+        self.onEditLocks = onEditLocks
     }
 
     public var body: some View {
@@ -73,15 +75,17 @@ public struct CellularCardView: View {
                     DetailRow(label: "Carrier", value: cellular.operatorName)
                     DetailRow(label: "Hardware", value: "\(cellular.boardType) / \(cellular.iduType)")
                     DetailRow(label: "CQI / QAM", value: "5G: \(cellular.nrCqi) (\(cellular.nrQamDl)) • 4G: \(cellular.lteCqi)")
-                    DetailRow(label: "5G Band & PCI", value: "Band: \(cellLock.currentBand5g) • PCI: \(cellLock.servingPci5g) (\(cellLock.servingFreq5g) MHz)")
-                    DetailRow(label: "4G Band & PCI", value: "Band: \(cellLock.currentBands4g) • PCI: \(cellLock.servingPci4g) (\(cellLock.servingFreq4g) MHz)")
+                    DetailRow(label: "5G Band & PCI", value: "Band: \(cellLock.currentBand5g) • PCI: \(cellLock.servingPci5g) (ARFCN \(cellLock.servingFreq5g))")
+                    DetailRow(label: "4G Band & PCI", value: "Band: \(cellLock.currentBands4g) • PCI: \(cellLock.servingPci4g) (EARFCN \(cellLock.servingFreq4g))")
 
                     HStack {
                         Text("Cell Lock Status")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
-                        Text(cellLock.nrLockEnabled ? "5G Locked" : (cellLock.lteLockEnabled ? "4G Locked" : "Auto (Unlocked)"))
+                        Text(cellLock.nrLockEnabled && cellLock.lteLockEnabled ? "4G + 5G Locked"
+                             : cellLock.nrLockEnabled ? "5G Locked"
+                             : cellLock.lteLockEnabled ? "4G Locked" : "Auto (Unlocked)")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundColor(cellLock.nrLockEnabled || cellLock.lteLockEnabled ? .orange : .green)
@@ -89,6 +93,15 @@ public struct CellularCardView: View {
                 }
                 .padding(10)
                 .liquidGlassPill()
+            }
+
+            if let onEditLocks {
+                Button(action: onEditLocks) {
+                    Label("Band & Cell Lock", systemImage: "lock.shield")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .liquidGlassActionButton()
             }
         }
         .liquidGlassCard()

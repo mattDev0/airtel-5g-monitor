@@ -23,6 +23,12 @@ public final class MonitorViewModel: ObservableObject {
     // Network Diagnosis state
     @Published public var diagnosisState: DiagnosisState = DiagnosisState()
 
+    // Band & cell lock state
+    @Published public var lockSettings: LockSettings? = nil
+    @Published public var isLockLoading: Bool = false
+    @Published public var isLockSaving: Bool = false
+    @Published public var lockMessage: String? = nil
+
     // Reboot state
     @Published public var isRebooting: Bool = false
     @Published public var rebootStatusMessage: String? = nil
@@ -105,6 +111,46 @@ public final class MonitorViewModel: ObservableObject {
         case .failure(let error):
             dnsStatusMessage = "Error: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Band & Cell Lock
+
+    public func loadLocks() async {
+        isLockLoading = true
+        defer { isLockLoading = false }
+        let (ok, settings) = await client.getLockSettings()
+        if ok {
+            lockSettings = settings
+        } else {
+            lockMessage = "Could not read lock settings from the router"
+        }
+    }
+
+    public func saveBandLock(lock4g: Bool, bands4g: Set<Int>, lock5g: Bool, bands5g: Set<Int>) async {
+        await runLockSave { await self.client.setBandLock(lock4g: lock4g, bands4g: bands4g, lock5g: lock5g, bands5g: bands5g) }
+    }
+
+    public func saveLteCellLock(enabled: Bool, cells: [LteLockCell]) async {
+        await runLockSave { await self.client.setLteCellLock(enabled: enabled, cells: cells) }
+    }
+
+    public func saveNrCellLock(enabled: Bool, cells: [NrLockCell]) async {
+        await runLockSave { await self.client.setNrCellLock(enabled: enabled, cells: cells) }
+    }
+
+    private func runLockSave(_ save: () async -> Result<String, Error>) async {
+        guard !isLockSaving else { return }
+        isLockSaving = true
+        lockMessage = nil
+        let result = await save()
+        let (ok, settings) = await client.getLockSettings()
+        if ok { lockSettings = settings }
+        isLockSaving = false
+        switch result {
+        case .success(let msg): lockMessage = msg
+        case .failure(let error): lockMessage = error.localizedDescription
+        }
+        await pollOnce()
     }
 
     // MARK: - Wi-Fi Radios Management

@@ -340,3 +340,49 @@ public struct DiagnosisState: Equatable {
         self.statusMessage = statusMessage
     }
 }
+
+// MARK: - Band lock (cmd 161) & local physical cell lock (cmd 160)
+
+/// Which LTE/NR bands the modem may use. Band numbers, e.g. 3 = B3, 78 = n78.
+public struct BandLockConfig: Hashable {
+    public var lock4gEnabled = false
+    public var supported4g: [Int] = []
+    public var locked4g: Set<Int> = []
+    public var lock5gEnabled = false
+    public var supported5g: [Int] = []
+    public var locked5g: Set<Int> = []
+    public init() {}
+}
+
+public struct LteLockCell: Equatable, Hashable {
+    public var earfcn: String
+    public var pci: String
+    public init(earfcn: String, pci: String) { self.earfcn = earfcn; self.pci = pci }
+}
+
+public struct NrLockCell: Equatable, Hashable {
+    public var band: String
+    public var arfcn: String
+    public var pci: String
+    public init(band: String, arfcn: String, pci: String) { self.band = band; self.arfcn = arfcn; self.pci = pci }
+}
+
+public enum LockState: Hashable { case unlocked, locked, failed }
+
+public struct CellLockConfig: Hashable {
+    public var lteEnabled = false
+    public var lteCells: [LteLockCell] = []
+    public var lteState: LockState = .unlocked
+    public var nrEnabled = false
+    public var nrCells: [NrLockCell] = []
+    public var nrState: LockState = .unlocked
+    public var current4g: LteLockCell?
+    public var current5g: NrLockCell?
+    public init() {}
+}
+
+public struct LockSettings: Equatable {
+    public var bands = BandLockConfig()
+    public var cells = CellLockConfig()
+    public init() {}
+}

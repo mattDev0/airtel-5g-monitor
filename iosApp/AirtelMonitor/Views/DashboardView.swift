@@ -5,6 +5,7 @@ public struct DashboardView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings: Bool = false
     @State private var showRebootAlert: Bool = false
+    @State private var showLocks: Bool = false
 
     public init() {}
 
@@ -35,7 +36,7 @@ public struct DashboardView: View {
                     // Main sections
                     VStack(spacing: 14) {
                         HeroMetricsView(wan: viewModel.state.wan)
-                        CellularCardView(cellular: viewModel.state.cellular, cellLock: viewModel.state.cellLock)
+                        CellularCardView(cellular: viewModel.state.cellular, cellLock: viewModel.state.cellLock) { showLocks = true }
                         WifiRadiosCardView(viewModel: viewModel)
                         LanDnsCardView(viewModel: viewModel)
                         DiagnosisCardView(viewModel: viewModel)
@@ -76,6 +77,9 @@ public struct DashboardView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheetView()
+        }
+        .sheet(isPresented: $showLocks) {
+            LockEditorView(viewModel: viewModel)
         }
         .alert("Reboot Router?", isPresented: $showRebootAlert) {
             Button("Cancel", role: .cancel) { }
