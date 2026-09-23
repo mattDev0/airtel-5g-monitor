@@ -33,6 +33,7 @@ fun CellularCellLockCard(
     cellLock: CellLockInfo,
     cellular: CellularMetrics,
     hardware: HardwareMetrics? = null,
+    onEditLocks: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
@@ -176,13 +177,23 @@ fun CellularCellLockCard(
                     DetailRow(title = "4G Signal (RSRP / SINR)", value = "${cellular.rsrp4g} dBm / ${cellular.sinr4g} dB")
                     DetailRow(title = "5G CQI / 4G CQI", value = "${cellular.nrCqi} / ${cellular.lteCqi}")
                     DetailRow(
-                        title = "Lock Configuration",
-                        value = when {
-                            cellLock.nrLockEnabled -> "NR PCI ${cellLock.nrLockPci}"
-                            cellLock.lteLockEnabled -> "LTE PCI ${cellLock.lteLockPci}"
-                            else -> "Unlocked (Router Auto)"
-                        }
+                        title = "4G Cell Lock",
+                        value = if (cellLock.lteLockEnabled) "PCI ${cellLock.lteLockPci} @ ${cellLock.lteLockFreq}" else "Auto"
                     )
+                    DetailRow(
+                        title = "5G Cell Lock",
+                        value = if (cellLock.nrLockEnabled) "PCI ${cellLock.nrLockPci} @ ${cellLock.nrLockFreq}" else "Auto"
+                    )
+                }
+            }
+
+            onEditLocks?.let {
+                FilledTonalButton(
+                    onClick = it,
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Band & Cell Lock")
                 }
             }
         }

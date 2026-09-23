@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.airtel.monitor.ui.components
 
 import androidx.compose.foundation.layout.*
@@ -161,13 +163,12 @@ fun LanDnsCard(
                 Button(
                     onClick = { showConfirmSave = true },
                     enabled = isLoaded && !isLoading && !isSaving && primaryInput.isNotBlank(),
-                    shape = CircleShape
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
+                        LoadingIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Saving...", style = MaterialTheme.typography.labelMedium)
@@ -203,7 +204,7 @@ fun LanDnsCard(
                         showConfirmSave = false
                         onSaveDns(primaryInput.trim(), secondaryInput.trim())
                     },
-                    shape = CircleShape
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Confirm")
                 }

@@ -211,13 +211,17 @@ fun HeaderBar(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Pause/Resume Button
-                    FilledTonalIconButton(
-                        onClick = onTogglePause,
+                    // Pause/Resume: a toggle, so it morphs to its "checked" shape while paused
+                    FilledTonalIconToggleButton(
+                        checked = isPaused,
+                        onCheckedChange = { onTogglePause() },
+                        shapes = IconButtonDefaults.toggleableShapes(),
                         modifier = Modifier.size(36.dp),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            checkedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            checkedContentColor = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     ) {
                         Icon(
@@ -230,6 +234,7 @@ fun HeaderBar(
                     // Refresh Button
                     FilledTonalIconButton(
                         onClick = onForceRefresh,
+                        shapes = IconButtonDefaults.shapes(),
                         modifier = Modifier.size(36.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -246,6 +251,7 @@ fun HeaderBar(
                     // DNS Button
                     FilledTonalIconButton(
                         onClick = onOpenDns,
+                        shapes = IconButtonDefaults.shapes(),
                         modifier = Modifier.size(36.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -262,6 +268,7 @@ fun HeaderBar(
                     // Settings Button
                     FilledTonalIconButton(
                         onClick = onOpenSettings,
+                        shapes = IconButtonDefaults.shapes(),
                         modifier = Modifier.size(36.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -278,6 +285,7 @@ fun HeaderBar(
                     // Reboot Button
                     FilledTonalIconButton(
                         onClick = onOpenReboot,
+                        shapes = IconButtonDefaults.shapes(),
                         modifier = Modifier.size(36.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = StatusError.copy(alpha = 0.15f),

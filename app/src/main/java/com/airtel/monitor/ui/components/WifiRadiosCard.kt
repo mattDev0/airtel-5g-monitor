@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.airtel.monitor.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -81,9 +83,8 @@ fun WifiRadiosCard(
                     modifier = Modifier.size(36.dp)
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
+                        LoadingIndicator(
+                            modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     } else {
@@ -138,9 +139,8 @@ fun WifiRadiosCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
+                        LoadingIndicator(
+                            modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -239,7 +239,7 @@ fun WifiRadiosCard(
                             onToggle5g(targetEnabled)
                         }
                     },
-                    shape = CircleShape,
+                    shapes = ButtonDefaults.shapes(),
                     colors = if (targetEnabled) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError

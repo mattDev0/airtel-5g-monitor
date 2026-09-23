@@ -120,7 +120,8 @@ fun MonitorDashboardScreen(
             CellularCellLockCard(
                 cellLock = rState?.cellLock ?: CellLockInfo(),
                 cellular = rState?.cellular ?: CellularMetrics(),
-                hardware = rState?.hardware
+                hardware = rState?.hardware,
+                onEditLocks = { viewModel.openLockEditor() }
             )
 
             // Minimal Wi-Fi Radios Card (2.4 GHz & 5 GHz)
@@ -183,6 +184,21 @@ fun MonitorDashboardScreen(
     }
 
     // Reboot Dialog
+    if (uiState.showLockEditor) {
+        LockEditorSheet(
+            settings = uiState.lockSettings,
+            networkType = uiState.routerState?.cellular?.networkType.orEmpty(),
+            isLoading = uiState.lockLoading,
+            isSaving = uiState.lockSaving,
+            message = uiState.lockMessage,
+            onDismiss = { viewModel.dismissLockEditor() },
+            onReload = { viewModel.loadLocks() },
+            onSaveBands = { l4, b4, l5, b5 -> viewModel.saveBandLock(l4, b4, l5, b5) },
+            onSaveLte = { on, cells -> viewModel.saveLteCellLock(on, cells) },
+            onSaveNr = { on, cells -> viewModel.saveNrCellLock(on, cells) }
+        )
+    }
+
     if (uiState.showRebootDialog) {
         RebootConfirmDialog(
             onDismiss = { viewModel.dismissRebootDialog() },
@@ -203,4 +219,3 @@ fun MonitorDashboardScreen(
         )
     }
 }
-

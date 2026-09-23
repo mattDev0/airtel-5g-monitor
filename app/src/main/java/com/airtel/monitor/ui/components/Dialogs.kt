@@ -64,7 +64,7 @@ fun RenameDeviceDialog(
             Button(
                 onClick = { onSave(aliasText.trim()) },
                 enabled = aliasText.isNotBlank(),
-                shape = CircleShape
+                shapes = ButtonDefaults.shapes()
             ) {
                 Text("Save", fontWeight = FontWeight.SemiBold)
             }
@@ -111,7 +111,7 @@ fun RebootConfirmDialog(
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                shape = CircleShape,
+                shapes = ButtonDefaults.shapes(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = StatusError,
                     contentColor = MaterialTheme.colorScheme.onError
@@ -140,7 +140,8 @@ fun SettingsDialog(
     var host by remember { mutableStateOf(currentHost) }
     var username by remember { mutableStateOf(currentUser) }
     var password by remember { mutableStateOf("admin") }
-    var interval by remember { mutableStateOf(currentPollInterval) }
+    val intervalSlider = remember { SliderState(value = currentPollInterval, steps = 8, trackRange = 0.5f..5.0f) }
+    val interval = intervalSlider.value
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -213,10 +214,7 @@ fun SettingsDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Slider(
-                        value = interval,
-                        onValueChange = { interval = it },
-                        valueRange = 0.5f..5.0f,
-                        steps = 8,
+                        state = intervalSlider,
                         colors = SliderDefaults.colors(
                             thumbColor = MaterialTheme.colorScheme.primary,
                             activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -229,7 +227,7 @@ fun SettingsDialog(
         confirmButton = {
             Button(
                 onClick = { onSave(host, username, password, interval) },
-                shape = CircleShape
+                shapes = ButtonDefaults.shapes()
             ) {
                 Text("Save", fontWeight = FontWeight.Bold)
             }

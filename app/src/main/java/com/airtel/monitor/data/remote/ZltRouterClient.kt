@@ -642,6 +642,172 @@ class ZltRouterClient(
         return Result.success("DNS saved, but the router has not confirmed it yet. Tap Reload shortly.")
     }
 
+    // ---- Band lock (cmd 161) and local physical cell lock (cmd 160) ----
+
+    fun getLockSettings(): Pair<Boolean, LockSettings> {
+        val band = query(161)
+        val cell = query(160)
+        val bandOk = band.optBoolean("success", false) || band.has("all_band_4g")
+        val cellOk = cell.optBoolean("success", false) || cell.has("lte_lock_sw")
+        if (!bandOk && !cellOk) return Pair(false, LockSettings())
+        return Pair(true, LockSettings(parseBandLock(band), parseCellLock(cell)))
+    }
+
+    private fun parseBandLock(r: JSONObject) = BandLockConfig(
+        lock4gEnabled = r.optString("band_4g_switch") == "1",
+        supported4g = BandMask.decode(r.optString("all_band_4g")).sorted(),
+        locked4g = BandMask.decode(r.optString("band_4g_mask")),
+        lock5gEnabled = r.optString("band_5g_switch") == "1",
+        supported5g = BandMask.decode(r.optString("all_band_5g")).sorted(),
+        locked5g = BandMask.decode(r.optString("band_5g_mask"))
+    )
+
+    private fun parseCellLock(r: JSONObject): CellLockConfig {
+        fun list(key: String) = r.optString(key).split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        fun state(flag: String) = when (r.optString(flag)) {
+            "1" -> LockState.LOCKED
+            "-1" -> LockState.FAILED
+            else -> LockState.UNLOCKED
+        }
+        val lteFreqs = list("lte_lock_freq")
+        val ltePcis = r.optString("lte_lock_pci").split(',')
+        val nrFreqs = list("nr_lock_freq")
+        val nrPcis = r.optString("nr_lock_pci").split(',')
+        val nrBands = r.optString("nr_lock_cell_band").split(',')
+        return CellLockConfig(
+            lteEnabled = r.optString("lte_lock_sw") == "1",
+            lteCells = lteFreqs.mapIndexed { i, f -> LteLockCell(f, ltePcis.getOrElse(i) { "" }.trim()) },
+            lteState = state("lock_4g_flag"),
+            nrEnabled = r.optString("nr_lock_sw") == "1",
+            nrCells = nrFreqs.mapIndexed { i, f ->
+                NrLockCell(nrBands.getOrElse(i) { "" }.trim(), f, nrPcis.getOrElse(i) { "" }.trim())
+            },
+            nrState = state("lock_5g_flag"),
+            current4g = r.optString("FREQ").takeIf { it.isNotBlank() }?.let { LteLockCell(it, r.optString("PCI")) },
+            current5g = r.optString("FREQ_5G").takeIf { it.isNotBlank() }
+                ?.let { NrLockCell(r.optString("current_band_5g"), it, r.optString("PCI_5G")) }
+        )
+    }
+
+    /**
+     * Saves which bands the modem may use, like the web UI's Band Lock tab. The modem
+     * re-registers afterwards, so the connection can drop for a few seconds.
+     */
+    suspend fun setBandLock(lock4g: Boolean, bands4g: Set<Int>, lock5g: Boolean, bands5g: Set<Int>): Result<String> {
+        val current = query(161)
+        if (!current.optBoolean("success", false) && !current.has("all_band_4g")) {
+            return Result.failure(IllegalStateException(current.optString("message", "").ifEmpty { "Could not read band lock settings" }))
+        }
+        val now = parseBandLock(current)
+        if (lock4g && bands4g.isEmpty()) return Result.failure(IllegalArgumentException("Pick at least one 4G band"))
+        if (lock5g && bands5g.isEmpty()) return Result.failure(IllegalArgumentException("Pick at least one 5G band"))
+        (bands4g - now.supported4g.toSet()).firstOrNull()?.let {
+            return Result.failure(IllegalArgumentException("This router doesn't support 4G band B$it"))
+        }
+        (bands5g - now.supported5g.toSet()).firstOrNull()?.let {
+            return Result.failure(IllegalArgumentException("This router doesn't support 5G band n$it"))
+        }
+        if (lock5g && bands5g.all { it in SUL_ONLY_5G_BANDS }) {
+            return Result.failure(IllegalArgumentException("A 5G lock can't use supplementary uplink bands only"))
+        }
+
+        val payload = mapOf(
+            "band4gRadio" to if (lock4g) "1" else "0",
+            "band5gRadio" to if (lock5g) "1" else "0",
+            "lock4gBand" to BandMask.encode(bands4g),
+            "lock5gBand" to BandMask.encode(bands5g),
+            "token" to query(233).optString("token", "")
+        )
+        val res = query(161, method = "POST", extra = payload, timeoutSeconds = 20)
+        if (!res.optBoolean("success", false)) {
+            return Result.failure(IllegalStateException(res.optString("message", "").ifEmpty { "Router rejected the band lock" }))
+        }
+        return confirm("Band lock") {
+            val b = parseBandLock(query(161))
+            b.lock4gEnabled == lock4g && b.lock5gEnabled == lock5g &&
+                (!lock4g || b.locked4g == bands4g) && (!lock5g || b.locked5g == bands5g)
+        }
+    }
+
+    /** Locks 4G to the given cells (or unlocks with an empty list / [enabled] false). */
+    suspend fun setLteCellLock(enabled: Boolean, cells: List<LteLockCell>): Result<String> {
+        val clean = cells.map { LteLockCell(it.earfcn.trim(), it.pci.trim()) }
+        if (enabled) {
+            if (clean.isEmpty()) return Result.failure(IllegalArgumentException("Add at least one 4G cell"))
+            clean.forEach { c ->
+                if (c.earfcn.toLongOrNull()?.let { it in 0..262143 } != true) {
+                    return Result.failure(IllegalArgumentException("4G EARFCN must be a number from 0 to 262143"))
+                }
+                if (c.pci.isNotEmpty() && c.pci.toIntOrNull()?.let { it in 0..503 } != true) {
+                    return Result.failure(IllegalArgumentException("4G PCI must be from 0 to 503, or blank"))
+                }
+            }
+            if (clean.distinct().size != clean.size) return Result.failure(IllegalArgumentException("The same 4G cell is listed twice"))
+        }
+        val on = enabled && clean.isNotEmpty()
+        val payload = mapOf(
+            "subcmd" to 0,
+            "lte_lock_sw" to if (on) "1" else "0",
+            "lte_lock_freq" to if (on) clean.joinToString(",") { it.earfcn } else "",
+            "lte_lock_pci" to if (on) clean.joinToString(",") { it.pci } else "",
+            "token" to query(233).optString("token", "")
+        )
+        val res = query(160, method = "POST", extra = payload, timeoutSeconds = 20)
+        if (!res.optBoolean("success", false)) {
+            return Result.failure(IllegalStateException(res.optString("message", "").ifEmpty { "Router rejected the 4G cell lock" }))
+        }
+        return confirm(if (on) "4G cell lock" else "4G cell unlock") {
+            val c = parseCellLock(query(160))
+            c.lteEnabled == on && (!on || c.lteCells == clean)
+        }
+    }
+
+    /** Locks 5G NR to the given cells (or unlocks with an empty list / [enabled] false). */
+    suspend fun setNrCellLock(enabled: Boolean, cells: List<NrLockCell>): Result<String> {
+        val clean = cells.map { NrLockCell(it.band.trim(), it.arfcn.trim(), it.pci.trim()) }
+        if (enabled) {
+            if (clean.isEmpty()) return Result.failure(IllegalArgumentException("Add at least one 5G cell"))
+            clean.forEach { c ->
+                if (c.band.toIntOrNull()?.let { it in 1..264 } != true) {
+                    return Result.failure(IllegalArgumentException("5G band must be a number from 1 to 264 (e.g. 78 for n78)"))
+                }
+                if (c.arfcn.toLongOrNull()?.let { it in 1..3279165 } != true) {
+                    return Result.failure(IllegalArgumentException("5G ARFCN must be a number from 1 to 3279165"))
+                }
+                if (c.pci.isNotEmpty() && c.pci.toIntOrNull()?.let { it in 0..1007 } != true) {
+                    return Result.failure(IllegalArgumentException("5G PCI must be from 0 to 1007, or blank"))
+                }
+            }
+            if (clean.distinct().size != clean.size) return Result.failure(IllegalArgumentException("The same 5G cell is listed twice"))
+        }
+        val on = enabled && clean.isNotEmpty()
+        val payload = mapOf(
+            "subcmd" to 1,
+            "nr_lock_sw" to if (on) "1" else "0",
+            "nr_lock_freq" to if (on) clean.joinToString(",") { it.arfcn } else "",
+            "nr_lock_pci" to if (on) clean.joinToString(",") { it.pci } else "",
+            "nr_lock_cell_band" to if (on) clean.joinToString(",") { it.band } else "",
+            "token" to query(233).optString("token", "")
+        )
+        val res = query(160, method = "POST", extra = payload, timeoutSeconds = 20)
+        if (!res.optBoolean("success", false)) {
+            return Result.failure(IllegalStateException(res.optString("message", "").ifEmpty { "Router rejected the 5G cell lock" }))
+        }
+        return confirm(if (on) "5G cell lock" else "5G cell unlock") {
+            val c = parseCellLock(query(160))
+            c.nrEnabled == on && (!on || c.nrCells == clean)
+        }
+    }
+
+    /** Reads the setting back until it matches; the modem may be re-registering meanwhile. */
+    private suspend fun confirm(what: String, matches: () -> Boolean): Result<String> {
+        for (i in 0 until 8) {
+            delay(2000)
+            if (matches()) return Result.success("$what saved and confirmed by router")
+        }
+        return Result.failure(IllegalStateException("$what was sent, but the router still reports the old setting"))
+    }
+
     // ---- Wi-Fi Radio Management (2.4 GHz & 5 GHz) ----
     private fun decodeBase64Ssid(raw: String): String {
         if (raw.isBlank()) return ""
@@ -915,5 +1081,28 @@ class ZltRouterClient(
 
     private fun roundTo2(value: Double): Double {
         return (value * 100.0).roundToLong() / 100.0
+    }
+}
+
+/** 5G bands that are supplementary uplink only; a lock can't consist of just these. */
+internal val SUL_ONLY_5G_BANDS = setOf(75, 76, 80, 81, 82, 83, 84, 86)
+
+/**
+ * Band sets as the router encodes them: a hex bitmask where bit 0 is band 1
+ * (e.g. B1+B3 = "5", n41+n78 = "20000000010000000000").
+ */
+object BandMask {
+    fun decode(hex: String?): Set<Int> {
+        val clean = hex?.trim().orEmpty()
+        if (clean.isEmpty()) return emptySet()
+        val value = clean.toBigIntegerOrNull(16) ?: return emptySet()
+        return (0 until value.bitLength()).filter { value.testBit(it) }.map { it + 1 }.toSet()
+    }
+
+    fun encode(bands: Set<Int>): String {
+        if (bands.isEmpty()) return ""
+        var value = java.math.BigInteger.ZERO
+        bands.filter { it >= 1 }.forEach { value = value.setBit(it - 1) }
+        return value.toString(16)
     }
 }

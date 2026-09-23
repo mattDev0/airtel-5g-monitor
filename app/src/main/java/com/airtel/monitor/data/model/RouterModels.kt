@@ -146,3 +146,36 @@ data class RouterState(
     val devices: List<DeviceItem> = emptyList(),
     val history: List<BandwidthPoint> = emptyList()
 )
+
+/** cmd 161: which LTE/NR bands the modem may use. Band numbers, e.g. 3 = B3, 78 = n78. */
+data class BandLockConfig(
+    val lock4gEnabled: Boolean = false,
+    val supported4g: List<Int> = emptyList(),
+    val locked4g: Set<Int> = emptySet(),
+    val lock5gEnabled: Boolean = false,
+    val supported5g: List<Int> = emptyList(),
+    val locked5g: Set<Int> = emptySet()
+)
+
+data class LteLockCell(val earfcn: String, val pci: String)
+
+data class NrLockCell(val band: String, val arfcn: String, val pci: String)
+
+enum class LockState { UNLOCKED, LOCKED, FAILED }
+
+/** cmd 160: local physical cell locking, plus the cell the modem is on right now. */
+data class CellLockConfig(
+    val lteEnabled: Boolean = false,
+    val lteCells: List<LteLockCell> = emptyList(),
+    val lteState: LockState = LockState.UNLOCKED,
+    val nrEnabled: Boolean = false,
+    val nrCells: List<NrLockCell> = emptyList(),
+    val nrState: LockState = LockState.UNLOCKED,
+    val current4g: LteLockCell? = null,
+    val current5g: NrLockCell? = null
+)
+
+data class LockSettings(
+    val bands: BandLockConfig = BandLockConfig(),
+    val cells: CellLockConfig = CellLockConfig()
+)

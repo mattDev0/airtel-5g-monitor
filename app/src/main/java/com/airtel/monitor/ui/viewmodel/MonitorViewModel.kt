@@ -38,6 +38,11 @@ data class MonitorUiState(
     val wifiRadioSaving: Boolean = false,
     val wifiRadioMessage: String? = null,
     val diagnosisState: DiagnosisState = DiagnosisState(),
+    val showLockEditor: Boolean = false,
+    val lockSettings: LockSettings? = null,
+    val lockLoading: Boolean = false,
+    val lockSaving: Boolean = false,
+    val lockMessage: String? = null,
     val routerHost: String = "192.168.1.1",
     val username: String = "root"
 ) {
@@ -333,6 +338,61 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
                 // Show what the router actually has, not what was typed.
                 loadDns()
             }
+        }
+    }
+
+    // ---- Band lock & cell lock editor ----
+
+    fun openLockEditor() {
+        _uiState.update { it.copy(showLockEditor = true, lockMessage = null) }
+        loadLocks()
+    }
+
+    fun dismissLockEditor() {
+        _uiState.update { it.copy(showLockEditor = false, lockMessage = null) }
+    }
+
+    fun loadLocks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(lockLoading = true) }
+            val (ok, settings) = routerClient.getLockSettings()
+            _uiState.update {
+                it.copy(
+                    lockLoading = false,
+                    lockSettings = if (ok) settings else it.lockSettings,
+                    lockMessage = if (ok) it.lockMessage else "Could not read lock settings from the router"
+                )
+            }
+        }
+    }
+
+    fun saveBandLock(lock4g: Boolean, bands4g: Set<Int>, lock5g: Boolean, bands5g: Set<Int>) =
+        runLockSave { routerClient.setBandLock(lock4g, bands4g, lock5g, bands5g) }
+
+    fun saveLteCellLock(enabled: Boolean, cells: List<LteLockCell>) =
+        runLockSave { routerClient.setLteCellLock(enabled, cells) }
+
+    fun saveNrCellLock(enabled: Boolean, cells: List<NrLockCell>) =
+        runLockSave { routerClient.setNrCellLock(enabled, cells) }
+
+    private fun runLockSave(save: suspend () -> Result<String>) {
+        if (_uiState.value.lockSaving) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(lockSaving = true, lockMessage = null) }
+            val result = try {
+                save()
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            val (ok, settings) = routerClient.getLockSettings()
+            _uiState.update {
+                it.copy(
+                    lockSaving = false,
+                    lockSettings = if (ok) settings else it.lockSettings,
+                    lockMessage = result.fold({ msg -> msg }, { e -> e.message ?: "Save failed" })
+                )
+            }
+            performPoll()
         }
     }
 

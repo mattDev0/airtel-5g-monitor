@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.airtel.monitor.ui.components
 
 import android.content.ClipData
@@ -20,6 +22,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -139,9 +144,8 @@ fun NetworkDiagnosisCard(
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         if (diagnosisState.isRunning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(10.dp),
-                                strokeWidth = 1.5.dp,
+                            LoadingIndicator(
+                                modifier = Modifier.size(16.dp),
                                 color = StatusSuccess
                             )
                         }
@@ -155,48 +159,33 @@ fun NetworkDiagnosisCard(
                 }
             }
 
-            // Mode Selector (Ping vs Traceroute)
+            // Mode Selector (Ping vs Traceroute): connected button group
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
             ) {
-                FilterChip(
-                    selected = diagnosisState.mode == DiagnosisMode.PING,
-                    onClick = { onModeChanged(DiagnosisMode.PING) },
-                    label = { Text("Ping Test") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
-                    shape = CircleShape,
+                ToggleButton(
+                    checked = diagnosisState.mode == DiagnosisMode.PING,
+                    onCheckedChange = { onModeChanged(DiagnosisMode.PING) },
                     enabled = !diagnosisState.isRunning,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                )
-
-                FilterChip(
-                    selected = diagnosisState.mode == DiagnosisMode.TRACEROUTE,
-                    onClick = { onModeChanged(DiagnosisMode.TRACEROUTE) },
-                    label = { Text("Traceroute") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Route,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
-                    shape = CircleShape,
+                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                    modifier = Modifier.weight(1f).semantics { role = Role.RadioButton }
+                ) {
+                    Icon(Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                    Text("Ping Test")
+                }
+                ToggleButton(
+                    checked = diagnosisState.mode == DiagnosisMode.TRACEROUTE,
+                    onCheckedChange = { onModeChanged(DiagnosisMode.TRACEROUTE) },
                     enabled = !diagnosisState.isRunning,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                )
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    modifier = Modifier.weight(1f).semantics { role = Role.RadioButton }
+                ) {
+                    Icon(Icons.Default.Route, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                    Text("Traceroute")
+                }
             }
 
             // Target Host Input
@@ -255,18 +244,24 @@ fun NetworkDiagnosisCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        listOf(4, 10, 20).forEach { count ->
-                            FilterChip(
-                                selected = diagnosisState.pingTimes == count,
-                                onClick = { onPingTimesChanged(count) },
-                                label = { Text("$count", style = MaterialTheme.typography.labelSmall) },
-                                shape = CircleShape,
-                                enabled = !diagnosisState.isRunning,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
+                        val counts = listOf(4, 10, 20)
+                        Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                            counts.forEachIndexed { index, count ->
+                                ToggleButton(
+                                    checked = diagnosisState.pingTimes == count,
+                                    onCheckedChange = { onPingTimesChanged(count) },
+                                    enabled = !diagnosisState.isRunning,
+                                    buttonSize = ToggleButtonSize.ExtraSmall,
+                                    shapes = when (index) {
+                                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                        counts.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                    },
+                                    modifier = Modifier.semantics { role = Role.RadioButton }
+                                ) {
+                                    Text("$count", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                         }
                     }
                 }
@@ -309,7 +304,7 @@ fun NetworkDiagnosisCard(
                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
                             ),
-                            shape = CircleShape
+                            shapes = ButtonDefaults.shapes()
                         ) {
                             Icon(imageVector = Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -322,7 +317,7 @@ fun NetworkDiagnosisCard(
                                 onStart()
                             },
                             enabled = diagnosisState.target.isNotBlank(),
-                            shape = CircleShape
+                            shapes = ButtonDefaults.shapes()
                         ) {
                             Icon(
                                 imageVector = if (diagnosisState.mode == DiagnosisMode.PING) Icons.Default.PlayArrow else Icons.Default.Route,

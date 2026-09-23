@@ -1,6 +1,9 @@
 package com.airtel.monitor.data.remote
 
 import com.airtel.monitor.data.model.DeviceType
+import com.airtel.monitor.data.model.LockState
+import com.airtel.monitor.data.model.LteLockCell
+import com.airtel.monitor.data.model.NrLockCell
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
 import org.json.JSONObject
@@ -380,4 +383,124 @@ class ZltRouterClientTest {
         .put("broadcast", "1").put("wifiSames", "0").put("authenticationType", "2")
         .put("ssid", if (cmd == 2) "QWlydGVsXzVHXzIuNEdIeg==" else "QWlydGVsXzVHXzVHSHo=")
         .put("key", "placeholder-key")
+
+    // ---- Band lock & cell lock ----
+
+    /** cmd 161 reply shaped like this router's (B1/3/7/8/20/28/38/41, n41/n78). */
+    private fun bandReply(sw4: String, mask4: String, sw5: String, mask5: String) = JSONObject()
+        .put("success", true)
+        .put("all_band_4g", "120080800C5").put("band_4g_switch", sw4).put("band_4g_mask", mask4)
+        .put("all_band_5g", "20000000010000000000").put("band_5g_switch", sw5).put("band_5g_mask", mask5)
+
+    @Test
+    fun `band masks decode and encode like the router UI`() {
+        assertEquals(setOf(1, 3, 7, 8, 20, 28, 38, 41), BandMask.decode("120080800C5"))
+        assertEquals(setOf(41, 78), BandMask.decode("20000000010000000000"))
+        assertEquals("120080800c5", BandMask.encode(setOf(1, 3, 7, 8, 20, 28, 38, 41)))
+        assertEquals("5", BandMask.encode(setOf(1, 3)))
+        assertEquals("", BandMask.encode(emptySet()))
+        assertEquals(emptySet<Int>(), BandMask.decode(""))
+    }
+
+    @Test
+    fun `lock settings are parsed from cmd 160 and 161`() {
+        router.on(161) { bandReply("1", "5", "0", "20000000010000000000") }
+        router.on(160) {
+            JSONObject().put("success", true)
+                .put("lte_lock_sw", "1").put("lte_lock_freq", "225").put("lte_lock_pci", "456").put("lock_4g_flag", "1")
+                .put("nr_lock_sw", "1").put("nr_lock_freq", "627264").put("nr_lock_pci", "916")
+                .put("nr_lock_cell_band", "78").put("lock_5g_flag", "-1")
+                .put("FREQ", "225").put("PCI", "456").put("FREQ_5G", "627264").put("PCI_5G", "916").put("current_band_5g", "78")
+        }
+        val (ok, s) = client.getLockSettings()
+        assertTrue(ok)
+        assertEquals(listOf(1, 3, 7, 8, 20, 28, 38, 41), s.bands.supported4g)
+        assertEquals(setOf(1, 3), s.bands.locked4g)
+        assertTrue(s.bands.lock4gEnabled)
+        assertFalse(s.bands.lock5gEnabled)
+        assertEquals(listOf(LteLockCell("225", "456")), s.cells.lteCells)
+        assertEquals(LockState.LOCKED, s.cells.lteState)
+        assertEquals(listOf(NrLockCell("78", "627264", "916")), s.cells.nrCells)
+        assertEquals(LockState.FAILED, s.cells.nrState)
+        assertEquals(NrLockCell("78", "627264", "916"), s.cells.current5g)
+    }
+
+    @Test
+    fun `band lock posts masks, switches and a token, then confirms`() = runTest {
+        var stored = bandReply("0", "120080800C5", "0", "20000000010000000000")
+        router.on(161, "GET") { stored }
+        router.on(161, "POST") { req ->
+            stored = bandReply(req.getString("band4gRadio"), req.getString("lock4gBand"),
+                req.getString("band5gRadio"), req.getString("lock5gBand"))
+            JSONObject().put("success", true)
+        }
+        val result = client.setBandLock(true, setOf(3, 7), true, setOf(78))
+        assertTrue(result.exceptionOrNull()?.message, result.isSuccess)
+        val post = router.sent(161, "POST").single()
+        assertEquals("1", post.getString("band4gRadio"))
+        assertEquals("44", post.getString("lock4gBand"))
+        assertEquals("1", post.getString("band5gRadio"))
+        assertEquals("20000000000000000000", post.getString("lock5gBand"))
+        assertTrue(post.getString("token").startsWith("T"))
+    }
+
+    @Test
+    fun `invalid band locks never reach the router`() = runTest {
+        router.on(161) { bandReply("0", "", "0", "") }
+        assertTrue(client.setBandLock(true, emptySet(), false, emptySet()).isFailure)
+        assertTrue(client.setBandLock(true, setOf(5), false, emptySet()).isFailure)   // B5 unsupported
+        assertTrue(router.sent(161, "POST").isEmpty())
+    }
+
+    @Test
+    fun `4G and 5G cell locks use subcmd 0 and 1 with comma lists`() = runTest {
+        var cell = JSONObject().put("success", true).put("lte_lock_sw", "0").put("nr_lock_sw", "0")
+        router.on(160, "GET") { cell }
+        router.on(160, "POST") { req ->
+            if (req.getInt("subcmd") == 0) {
+                cell.put("lte_lock_sw", req.getString("lte_lock_sw")).put("lte_lock_freq", req.getString("lte_lock_freq"))
+                    .put("lte_lock_pci", req.getString("lte_lock_pci"))
+            } else {
+                cell.put("nr_lock_sw", req.getString("nr_lock_sw")).put("nr_lock_freq", req.getString("nr_lock_freq"))
+                    .put("nr_lock_pci", req.getString("nr_lock_pci")).put("nr_lock_cell_band", req.getString("nr_lock_cell_band"))
+            }
+            JSONObject().put("success", true)
+        }
+
+        assertTrue(client.setLteCellLock(true, listOf(LteLockCell("225", "456"), LteLockCell("1850", ""))).isSuccess)
+        val lte = router.sent(160, "POST").single { it.getInt("subcmd") == 0 }
+        assertEquals("1", lte.getString("lte_lock_sw"))
+        assertEquals("225,1850", lte.getString("lte_lock_freq"))
+        assertEquals("456,", lte.getString("lte_lock_pci"))
+
+        assertTrue(client.setNrCellLock(true, listOf(NrLockCell("78", "627264", "916"))).isSuccess)
+        val nr = router.sent(160, "POST").single { it.getInt("subcmd") == 1 }
+        assertEquals("78", nr.getString("nr_lock_cell_band"))
+        assertEquals("627264", nr.getString("nr_lock_freq"))
+        assertEquals("916", nr.getString("nr_lock_pci"))
+
+        assertTrue(client.setLteCellLock(false, emptyList()).isSuccess)
+        val unlock = router.sent(160, "POST").last()
+        assertEquals("0", unlock.getString("lte_lock_sw"))
+        assertEquals("", unlock.getString("lte_lock_freq"))
+    }
+
+    @Test
+    fun `out of range cells are rejected locally`() = runTest {
+        assertTrue(client.setLteCellLock(true, listOf(LteLockCell("225", "504"))).isFailure)
+        assertTrue(client.setLteCellLock(true, listOf(LteLockCell("abc", "1"))).isFailure)
+        assertTrue(client.setNrCellLock(true, listOf(NrLockCell("300", "627264", "1"))).isFailure)
+        assertTrue(client.setNrCellLock(true, listOf(NrLockCell("78", "627264", "1008"))).isFailure)
+        assertTrue(client.setLteCellLock(true, emptyList()).isFailure)
+        assertTrue(router.sent(160, "POST").isEmpty())
+    }
+
+    @Test
+    fun `a cell lock the router does not keep is reported`() = runTest {
+        router.on(160, "GET") { JSONObject().put("success", true).put("lte_lock_sw", "0") }
+        router.on(160, "POST") { JSONObject().put("success", true) }
+        val result = client.setLteCellLock(true, listOf(LteLockCell("225", "456")))
+        assertTrue(result.isFailure)
+    }
+
 }

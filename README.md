@@ -41,13 +41,15 @@ apps don't use it; they reimplement the client natively.
 ## What works and what doesn't (this firmware)
 - ✅ Live **total** WAN download/upload (from the router's `cmd 18` byte counters).
 - ✅ Device list, Wi-Fi PHY link rates, signal, rename (local aliases).
-- ✅ Read-only band / cell-lock status; router **reboot**.
+- ✅ Router **reboot**.
 - ✅ **LAN DNS** — view and set the primary/secondary DNS the router hands to
   devices (`cmd 3`). The stock UI hides the secondary field; the app echoes the
   full LAN record on save so nothing else changes, and reads it back to confirm.
 - ❌ **Per-device** throughput — not exposed by the firmware (no per-client counters).
-- ❌ **QoS speed limiter** and **band/PCI-lock editing** — the router blocks those
-  writes (`LIMITED_ACCESS`), so they were removed rather than shown broken.
+- ✅ **Band lock & cell lock** (Android) — choose allowed 4G/5G bands (`cmd 161`) and
+  lock to specific 4G/5G cells by EARFCN/ARFCN + PCI (`cmd 160`), like the web UI's
+  Advanced Settings (needs the `root` login).
+- ❌ **QoS speed limiter** — the router blocks it for this account (`LIMITED_ACCESS`).
 
 ## Android
 Native Kotlin + Jetpack Compose, targets **Android 17 (SDK 37)**, min Android 7.0.

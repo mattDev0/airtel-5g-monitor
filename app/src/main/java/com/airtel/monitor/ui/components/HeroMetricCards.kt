@@ -176,16 +176,12 @@ private fun SpeedMetricColumn(
             )
         }
 
-        // Slim Progress Bar
-        LinearProgressIndicator(
+        // Live load bar: the Expressive wavy indicator ripples while traffic flows
+        LinearWavyProgressIndicator(
             progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp)),
+            modifier = Modifier.fillMaxWidth(),
             color = activeColor,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            strokeCap = StrokeCap.Round
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
 
         // Subtext: KB/s & Peak
