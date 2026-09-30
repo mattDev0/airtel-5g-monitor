@@ -121,7 +121,11 @@ fun MonitorDashboardScreen(
                 cellLock = rState?.cellLock ?: CellLockInfo(),
                 cellular = rState?.cellular ?: CellularMetrics(),
                 hardware = rState?.hardware,
-                onEditLocks = { viewModel.openLockEditor() }
+                onEditLocks = { viewModel.openLockEditor() },
+                networkBusy = uiState.networkActionBusy,
+                onMobileData = { viewModel.setMobileData(it) },
+                onFlightMode = { viewModel.setFlightMode(it) },
+                onRescan = { viewModel.rescanNetwork() }
             )
 
             // Minimal Wi-Fi Radios Card (2.4 GHz & 5 GHz)

@@ -38,6 +38,7 @@ data class MonitorUiState(
     val wifiRadioSaving: Boolean = false,
     val wifiRadioMessage: String? = null,
     val diagnosisState: DiagnosisState = DiagnosisState(),
+    val networkActionBusy: Boolean = false,
     val showLockEditor: Boolean = false,
     val lockSettings: LockSettings? = null,
     val lockLoading: Boolean = false,
@@ -338,6 +339,33 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
                 // Show what the router actually has, not what was typed.
                 loadDns()
             }
+        }
+    }
+
+    // ---- Mobile network controls ----
+
+    fun setMobileData(on: Boolean) = runNetworkAction { routerClient.setMobileData(on) }
+
+    fun setFlightMode(on: Boolean) = runNetworkAction { routerClient.setFlightMode(on) }
+
+    fun rescanNetwork() = runNetworkAction { routerClient.rescanNetwork() }
+
+    private fun runNetworkAction(action: suspend () -> Result<String>) {
+        if (_uiState.value.networkActionBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(networkActionBusy = true) }
+            val result = try {
+                action()
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            _uiState.update {
+                it.copy(
+                    networkActionBusy = false,
+                    statusMessage = result.fold({ msg -> msg }, { e -> e.message ?: "Router rejected the change" })
+                )
+            }
+            performPoll()
         }
     }
 

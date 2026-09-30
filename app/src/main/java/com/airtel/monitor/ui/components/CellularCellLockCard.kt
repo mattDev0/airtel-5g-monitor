@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.airtel.monitor.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -34,9 +36,15 @@ fun CellularCellLockCard(
     cellular: CellularMetrics,
     hardware: HardwareMetrics? = null,
     onEditLocks: (() -> Unit)? = null,
+    networkBusy: Boolean = false,
+    onMobileData: ((Boolean) -> Unit)? = null,
+    onFlightMode: ((Boolean) -> Unit)? = null,
+    onRescan: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    // Actions that cut the connection wait for a confirmation.
+    var pending by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -187,15 +195,109 @@ fun CellularCellLockCard(
                 }
             }
 
-            onEditLocks?.let {
-                FilledTonalButton(
-                    onClick = it,
-                    shapes = ButtonDefaults.shapes(),
-                    modifier = Modifier.fillMaxWidth()
+            if (onMobileData != null && onFlightMode != null) {
+                val dataOn = cellLock.mobileDataOn
+                val flightOn = cellLock.flightModeOn
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Band & Cell Lock")
+                    NetworkSwitch(
+                        label = "Mobile data",
+                        checked = dataOn,
+                        enabled = !networkBusy,
+                        onChange = { on ->
+                            if (on) onMobileData(true)
+                            else pending = "Turn off mobile data? The internet stops for every device until you turn it back on. Wi-Fi and this app keep working." to { onMobileData(false) }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    NetworkSwitch(
+                        label = "Flight mode",
+                        checked = flightOn,
+                        enabled = !networkBusy,
+                        onChange = { on ->
+                            if (!on) onFlightMode(false)
+                            else pending = "Turn on flight mode? The modem's radio switches off, so there's no internet until you turn it off again. Wi-Fi and this app keep working." to { onFlightMode(true) }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                onEditLocks?.let {
+                    FilledTonalButton(
+                        onClick = it,
+                        shapes = ButtonDefaults.shapes(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Band & Cell Lock", maxLines = 1)
+                    }
+                }
+                onRescan?.let { rescan ->
+                    FilledTonalButton(
+                        onClick = {
+                            pending = "Search for the network again? The connection drops for up to a minute while the modem searches." to rescan
+                        },
+                        enabled = !networkBusy && cellLock.flightModeOn != true,
+                        shapes = ButtonDefaults.shapes(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (networkBusy) {
+                            LoadingIndicator(modifier = Modifier.size(20.dp))
+                        } else {
+                            Text("Re-search", maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pending?.let { (text, action) ->
+        AlertDialog(
+            onDismissRequest = { pending = null },
+            text = { Text(text) },
+            confirmButton = {
+                Button(onClick = { pending = null; action() }, shapes = ButtonDefaults.shapes()) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } }
+        )
+    }
+}
+
+@Composable
+private fun NetworkSwitch(
+    label: String,
+    checked: Boolean?,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = checked == true,
+                onCheckedChange = onChange,
+                enabled = enabled && checked != null
+            )
         }
     }
 }

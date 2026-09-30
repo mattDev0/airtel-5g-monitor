@@ -72,7 +72,10 @@ data class CellLockInfo(
     val nrLockPci: String = "-",
     val nrLockFreq: String = "-",
     val bandLock4gEnabled: Boolean = false,
-    val bandLock5gEnabled: Boolean = false
+    val bandLock5gEnabled: Boolean = false,
+    /** Null until the router has reported it. */
+    val mobileDataOn: Boolean? = null,
+    val flightModeOn: Boolean? = null
 )
 
 data class HardwareMetrics(

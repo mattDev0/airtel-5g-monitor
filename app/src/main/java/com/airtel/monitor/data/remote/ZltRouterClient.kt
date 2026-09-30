@@ -91,6 +91,7 @@ class ZltRouterClient(
     private var cachedLatestChart: JSONObject = JSONObject()
     private var cachedCell160: JSONObject = JSONObject()
     private var cachedBand161: JSONObject = JSONObject()
+    private var cachedNetMode218: JSONObject = JSONObject()
 
     var peakDlMbps: Double = 0.0
         private set
@@ -311,6 +312,12 @@ class ZltRouterClient(
         if (band.optBoolean("success", true) && band.length() > 1) {
             cachedBand161 = band
         }
+
+        // cmd 218: mobile data (dialMode) and flight mode switches
+        val mode = query(218)
+        if (mode.has("flightMode")) {
+            cachedNetMode218 = mode
+        }
     }
 
     fun pollMetrics(): Result<RouterState> {
@@ -492,7 +499,9 @@ class ZltRouterClient(
             nrLockPci = cell160.optString("nr_lock_pci", "-").ifEmpty { "-" },
             nrLockFreq = cell160.optString("nr_lock_freq", "-").ifEmpty { "-" },
             bandLock4gEnabled = tf("band_4g_switch", band161),
-            bandLock5gEnabled = tf("band_5g_switch", band161)
+            bandLock5gEnabled = tf("band_5g_switch", band161),
+            mobileDataOn = cachedNetMode218.optString("dialMode").takeIf { it.isNotEmpty() }?.let { it == "1" },
+            flightModeOn = cachedNetMode218.optString("flightMode").takeIf { it.isNotEmpty() }?.let { it == "1" }
         )
 
         // 10. Hardware
@@ -640,6 +649,48 @@ class ZltRouterClient(
             return Result.failure(IllegalStateException("Router accepted the save but kept $kept"))
         }
         return Result.success("DNS saved, but the router has not confirmed it yet. Tap Reload shortly.")
+    }
+
+    // ---- Mobile network controls (web UI: Network Configuration) ----
+
+    /** Turns the cellular data connection on or off (cmd 222). Wi-Fi and the LAN keep working. */
+    suspend fun setMobileData(on: Boolean): Result<String> =
+        setNetworkSwitch(cmd = 222, key = "dialMode", on = on, label = "Mobile data")
+
+    /** Flight mode switches the modem's radio off or on (cmd 226). */
+    suspend fun setFlightMode(on: Boolean): Result<String> =
+        setNetworkSwitch(cmd = 226, key = "flightMode", on = on, label = "Flight mode")
+
+    private suspend fun setNetworkSwitch(cmd: Int, key: String, on: Boolean, label: String): Result<String> {
+        val value = if (on) "1" else "0"
+        val payload = mapOf(key to value, "token" to query(233).optString("token", ""))
+        val res = query(cmd, method = "POST", extra = payload, timeoutSeconds = 20)
+        // The web UI treats message "0" as success.
+        if (res.optString("message") != "0" && !res.optBoolean("success", false)) {
+            return Result.failure(IllegalStateException(res.optString("message", "").ifEmpty { "Router rejected the change" }))
+        }
+        val state = if (on) "on" else "off"
+        return confirm("$label $state") {
+            val now = query(218)
+            if (now.has("flightMode")) cachedNetMode218 = now
+            now.optString(key) == value
+        }
+    }
+
+    /**
+     * Makes the modem search for the mobile network again (cmd 288, like the web UI's
+     * "re-search network"). The connection drops while it searches. Sent without the
+     * automatic retry `query` does for reads, so it can never trigger a second search.
+     */
+    fun rescanNetwork(): Result<String> {
+        val reply = queryRaw(288, method = "GET", timeoutSeconds = 20)
+        if (reply.isBlank()) return Result.failure(IllegalStateException("No answer from the router"))
+        val json = try { JSONObject(reply) } catch (e: Exception) { JSONObject() }
+        return if (json.optString("message") == "0" || json.optBoolean("success", false)) {
+            Result.success("Searching for the network. The connection is back in about a minute.")
+        } else {
+            Result.failure(IllegalStateException(json.optString("message", "").ifEmpty { "Router rejected the network search" }))
+        }
     }
 
     // ---- Band lock (cmd 161) and local physical cell lock (cmd 160) ----

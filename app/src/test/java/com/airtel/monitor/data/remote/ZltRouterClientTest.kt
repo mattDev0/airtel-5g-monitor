@@ -503,4 +503,41 @@ class ZltRouterClientTest {
         assertTrue(result.isFailure)
     }
 
+
+    // ---- Mobile network controls ----
+
+    @Test
+    fun `mobile data and flight mode post the web UI fields and confirm`() = runTest {
+        val mode = JSONObject().put("success", true).put("dialMode", "1").put("flightMode", "0")
+        router.on(218, "GET") { mode }
+        router.on(222, "POST") { req -> mode.put("dialMode", req.getString("dialMode")); JSONObject().put("message", "0") }
+        router.on(226, "POST") { req -> mode.put("flightMode", req.getString("flightMode")); JSONObject().put("message", "0") }
+
+        assertTrue(client.setMobileData(false).isSuccess)
+        val data = router.sent(222, "POST").single()
+        assertEquals("0", data.getString("dialMode"))
+        assertTrue(data.getString("token").startsWith("T"))
+
+        assertTrue(client.setFlightMode(true).isSuccess)
+        assertEquals("1", router.sent(226, "POST").single().getString("flightMode"))
+    }
+
+    @Test
+    fun `a switch the router does not apply is reported`() = runTest {
+        router.on(218, "GET") { JSONObject().put("success", true).put("dialMode", "1").put("flightMode", "0") }
+        router.on(222, "POST") { JSONObject().put("message", "0") }
+        assertTrue(client.setMobileData(false).isFailure)
+    }
+
+    @Test
+    fun `re-search is one GET and is never retried`() {
+        router.on(288, "GET") { JSONObject().put("success", false).put("message", "1") }
+        assertTrue(client.rescanNetwork().isFailure)
+        assertEquals(1, router.sent(288, "GET").size)
+
+        router.on(288, "GET") { JSONObject().put("message", "0") }
+        assertTrue(client.rescanNetwork().isSuccess)
+        assertEquals(2, router.sent(288, "GET").size)
+    }
+
 }
