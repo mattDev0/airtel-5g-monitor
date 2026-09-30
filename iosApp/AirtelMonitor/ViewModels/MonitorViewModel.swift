@@ -29,6 +29,10 @@ public final class MonitorViewModel: ObservableObject {
     @Published public var isLockSaving: Bool = false
     @Published public var lockMessage: String? = nil
 
+    // Mobile network controls
+    @Published public var isNetworkBusy: Bool = false
+    @Published public var networkMessage: String? = nil
+
     // Reboot state
     @Published public var isRebooting: Bool = false
     @Published public var rebootStatusMessage: String? = nil
@@ -111,6 +115,32 @@ public final class MonitorViewModel: ObservableObject {
         case .failure(let error):
             dnsStatusMessage = "Error: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Mobile network controls
+
+    public func setMobileData(_ on: Bool) async {
+        await runNetworkAction { await self.client.setMobileData(on) }
+    }
+
+    public func setFlightMode(_ on: Bool) async {
+        await runNetworkAction { await self.client.setFlightMode(on) }
+    }
+
+    public func rescanNetwork() async {
+        await runNetworkAction { await self.client.rescanNetwork() }
+    }
+
+    private func runNetworkAction(_ action: () async -> Result<String, Error>) async {
+        guard !isNetworkBusy else { return }
+        isNetworkBusy = true
+        let result = await action()
+        isNetworkBusy = false
+        switch result {
+        case .success(let msg): networkMessage = msg
+        case .failure(let error): networkMessage = error.localizedDescription
+        }
+        await pollOnce()
     }
 
     // MARK: - Band & Cell Lock

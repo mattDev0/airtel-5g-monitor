@@ -56,3 +56,21 @@ final class LockLogicTests: XCTestCase {
         XCTAssertNotNil(LockLogic.validateNr([NrLockCell(band: "78", arfcn: "627264", pci: "1008")]))
     }
 }
+
+final class NetworkControlsTests: XCTestCase {
+    func testFlagParsing() {
+        XCTAssertEqual(NetworkControls.flag(["dialMode": "1"], "dialMode"), true)
+        XCTAssertEqual(NetworkControls.flag(["dialMode": "0"], "dialMode"), false)
+        XCTAssertEqual(NetworkControls.flag(["flightMode": 1], "flightMode"), true)
+        XCTAssertNil(NetworkControls.flag([:], "dialMode"))
+        XCTAssertNil(NetworkControls.flag(["dialMode": ""], "dialMode"))
+    }
+
+    func testAcceptedMatchesWebUI() {
+        XCTAssertTrue(NetworkControls.accepted(["message": "0"]))
+        XCTAssertTrue(NetworkControls.accepted(["success": true]))
+        XCTAssertFalse(NetworkControls.accepted(["message": "1"]))
+        XCTAssertFalse(NetworkControls.accepted(["success": false, "message": ""]))
+        XCTAssertFalse(NetworkControls.accepted([:]))
+    }
+}

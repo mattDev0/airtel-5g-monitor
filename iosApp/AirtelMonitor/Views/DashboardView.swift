@@ -36,7 +36,15 @@ public struct DashboardView: View {
                     // Main sections
                     VStack(spacing: 14) {
                         HeroMetricsView(wan: viewModel.state.wan)
-                        CellularCardView(cellular: viewModel.state.cellular, cellLock: viewModel.state.cellLock) { showLocks = true }
+                        CellularCardView(
+                            cellular: viewModel.state.cellular,
+                            cellLock: viewModel.state.cellLock,
+                            onEditLocks: { showLocks = true },
+                            networkBusy: viewModel.isNetworkBusy,
+                            onMobileData: { on in Task { await viewModel.setMobileData(on) } },
+                            onFlightMode: { on in Task { await viewModel.setFlightMode(on) } },
+                            onRescan: { Task { await viewModel.rescanNetwork() } }
+                        )
                         WifiRadiosCardView(viewModel: viewModel)
                         LanDnsCardView(viewModel: viewModel)
                         DiagnosisCardView(viewModel: viewModel)
@@ -80,6 +88,12 @@ public struct DashboardView: View {
         }
         .sheet(isPresented: $showLocks) {
             LockEditorView(viewModel: viewModel)
+        }
+        .alert(viewModel.networkMessage ?? "", isPresented: Binding(
+            get: { viewModel.networkMessage != nil },
+            set: { if !$0 { viewModel.networkMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
         }
         .alert("Reboot Router?", isPresented: $showRebootAlert) {
             Button("Cancel", role: .cancel) { }

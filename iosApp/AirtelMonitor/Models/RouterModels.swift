@@ -196,6 +196,9 @@ public struct CellLockInfo: Equatable {
     public let nrLockFreq: String
     public let bandLock4gEnabled: Bool
     public let bandLock5gEnabled: Bool
+    /// cmd 218 switches; nil until the router has reported them.
+    public let mobileDataOn: Bool?
+    public let flightModeOn: Bool?
 
     public init(
         servingPci4g: String = "-",
@@ -211,7 +214,9 @@ public struct CellLockInfo: Equatable {
         nrLockPci: String = "-",
         nrLockFreq: String = "-",
         bandLock4gEnabled: Bool = false,
-        bandLock5gEnabled: Bool = false
+        bandLock5gEnabled: Bool = false,
+        mobileDataOn: Bool? = nil,
+        flightModeOn: Bool? = nil
     ) {
         self.servingPci4g = servingPci4g
         self.servingFreq4g = servingFreq4g
@@ -227,6 +232,8 @@ public struct CellLockInfo: Equatable {
         self.nrLockFreq = nrLockFreq
         self.bandLock4gEnabled = bandLock4gEnabled
         self.bandLock5gEnabled = bandLock5gEnabled
+        self.mobileDataOn = mobileDataOn
+        self.flightModeOn = flightModeOn
     }
 }
 

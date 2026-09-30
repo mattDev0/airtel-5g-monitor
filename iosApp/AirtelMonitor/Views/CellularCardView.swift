@@ -4,12 +4,30 @@ public struct CellularCardView: View {
     public let cellular: CellularMetrics
     public let cellLock: CellLockInfo
     public var onEditLocks: (() -> Void)?
+    public var networkBusy: Bool
+    public var onMobileData: ((Bool) -> Void)?
+    public var onFlightMode: ((Bool) -> Void)?
+    public var onRescan: (() -> Void)?
     @State private var isExpanded: Bool = false
+    /// Actions that cut the connection wait for a confirmation.
+    @State private var pending: PendingAction?
 
-    public init(cellular: CellularMetrics, cellLock: CellLockInfo, onEditLocks: (() -> Void)? = nil) {
+    private struct PendingAction {
+        let title: String
+        let message: String
+        let run: () -> Void
+    }
+
+    public init(cellular: CellularMetrics, cellLock: CellLockInfo, onEditLocks: (() -> Void)? = nil,
+                networkBusy: Bool = false, onMobileData: ((Bool) -> Void)? = nil,
+                onFlightMode: ((Bool) -> Void)? = nil, onRescan: (() -> Void)? = nil) {
         self.cellular = cellular
         self.cellLock = cellLock
         self.onEditLocks = onEditLocks
+        self.networkBusy = networkBusy
+        self.onMobileData = onMobileData
+        self.onFlightMode = onFlightMode
+        self.onRescan = onRescan
     }
 
     public var body: some View {
@@ -95,16 +113,92 @@ public struct CellularCardView: View {
                 .liquidGlassPill()
             }
 
-            if let onEditLocks {
-                Button(action: onEditLocks) {
-                    Label("Band & Cell Lock", systemImage: "lock.shield")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
+            if let onMobileData, let onFlightMode {
+                HStack(spacing: 8) {
+                    NetworkToggle(title: "Mobile data", isOn: cellLock.mobileDataOn, disabled: networkBusy) { on in
+                        if on {
+                            onMobileData(true)
+                        } else {
+                            pending = PendingAction(
+                                title: "Turn off mobile data?",
+                                message: "The internet stops for every device until you turn it back on. Wi-Fi and this app keep working.",
+                                run: { onMobileData(false) })
+                        }
+                    }
+                    NetworkToggle(title: "Flight mode", isOn: cellLock.flightModeOn, disabled: networkBusy) { on in
+                        if !on {
+                            onFlightMode(false)
+                        } else {
+                            pending = PendingAction(
+                                title: "Turn on flight mode?",
+                                message: "The modem's radio switches off, so there's no internet until you turn it off again. Wi-Fi and this app keep working.",
+                                run: { onFlightMode(true) })
+                        }
+                    }
                 }
-                .liquidGlassActionButton()
+            }
+
+            HStack(spacing: 8) {
+                if let onEditLocks {
+                    Button(action: onEditLocks) {
+                        Text("Band & Cell Lock")
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .liquidGlassActionButton()
+                }
+                if let onRescan {
+                    Button {
+                        pending = PendingAction(
+                            title: "Search for the network again?",
+                            message: "The connection drops for up to a minute while the modem searches.",
+                            run: onRescan)
+                    } label: {
+                        Group {
+                            if networkBusy { ProgressView() } else { Text("Re-search") }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .liquidGlassActionButton()
+                    .disabled(networkBusy || cellLock.flightModeOn == true)
+                }
             }
         }
         .liquidGlassCard()
+        .alert(pending?.title ?? "", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {
+            Button("Cancel", role: .cancel) { pending = nil }
+            Button("Continue", role: .destructive) {
+                pending?.run()
+                pending = nil
+            }
+        } message: {
+            Text(pending?.message ?? "")
+        }
+    }
+}
+
+/// Compact labelled switch; greyed out until the router has reported the state.
+private struct NetworkToggle: View {
+    let title: String
+    let isOn: Bool?
+    let disabled: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { isOn == true }, set: { onChange($0) })) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .disabled(disabled || isOn == nil)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .liquidGlassPill()
     }
 }
 

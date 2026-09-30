@@ -18,6 +18,8 @@ public actor ZltRouterClient {
     private var cachedLatestChart: [String: Any] = [:]
     private var cachedCell160: [String: Any] = [:]
     private var cachedBand161: [String: Any] = [:]
+    /// cmd 218 (mobile data / flight mode); internal so the network-controls extension can refresh it.
+    var cachedNetMode218: [String: Any] = [:]
 
     public private(set) var peakDlMbps: Double = 0.0
     public private(set) var peakUlMbps: Double = 0.0
@@ -304,6 +306,12 @@ public actor ZltRouterClient {
         if band["success"] as? Bool != false && band.count > 1 {
             cachedBand161 = band
         }
+
+        // cmd 218: mobile data (dialMode) and flight mode switches
+        let mode = await query(cmdId: 218)
+        if mode["flightMode"] != nil {
+            cachedNetMode218 = mode
+        }
     }
 
     public func pollMetrics() async -> Result<RouterState, Error> {
@@ -475,7 +483,9 @@ public actor ZltRouterClient {
             nrLockPci: cell160["nr_lock_pci"] as? String ?? "-",
             nrLockFreq: cell160["nr_lock_freq"] as? String ?? "-",
             bandLock4gEnabled: tf("band_4g_switch", in: band161),
-            bandLock5gEnabled: tf("band_5g_switch", in: band161)
+            bandLock5gEnabled: tf("band_5g_switch", in: band161),
+            mobileDataOn: NetworkControls.flag(cachedNetMode218, "dialMode"),
+            flightModeOn: NetworkControls.flag(cachedNetMode218, "flightMode")
         )
 
         // Hardware
