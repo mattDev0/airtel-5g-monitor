@@ -26,7 +26,8 @@ public final class SettingsStore: ObservableObject {
         didSet { defaults.set(password, forKey: Keys.password) }
     }
 
-    @Published public var pollIntervalSeconds: Int {
+    /// Seconds between polls; fractional like Android (0.5-10).
+    @Published public var pollIntervalSeconds: Double {
         didSet { defaults.set(pollIntervalSeconds, forKey: Keys.pollIntervalSeconds) }
     }
 
@@ -41,8 +42,9 @@ public final class SettingsStore: ObservableObject {
         self.username = defaults.string(forKey: Keys.username) ?? "root"
         self.password = defaults.string(forKey: Keys.password) ?? "admin"
 
-        let storedInterval = defaults.integer(forKey: Keys.pollIntervalSeconds)
-        self.pollIntervalSeconds = storedInterval > 0 ? storedInterval : 2
+        // double(forKey:) also reads the whole-second values older versions stored.
+        let storedInterval = defaults.double(forKey: Keys.pollIntervalSeconds)
+        self.pollIntervalSeconds = storedInterval > 0 ? min(max(storedInterval, 0.5), 10) : 2
 
         self.deviceAliases = defaults.dictionary(forKey: Keys.deviceAliases) as? [String: String] ?? [:]
     }

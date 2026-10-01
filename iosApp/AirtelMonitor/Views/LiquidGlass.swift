@@ -104,6 +104,28 @@ public struct LiquidGlassSmallButtonModifier: ViewModifier {
     }
 }
 
+/// Round icon button (header actions, reload): glass on iOS 26, bordered before.
+public struct LiquidGlassIconButtonModifier: ViewModifier {
+    let prominent: Bool
+
+    @ViewBuilder
+    public func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            if prominent {
+                content.buttonStyle(.glassProminent).buttonBorderShape(.circle)
+            } else {
+                content.buttonStyle(.glass).buttonBorderShape(.circle)
+            }
+        } else {
+            if prominent {
+                content.buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            } else {
+                content.buttonStyle(.bordered).buttonBorderShape(.capsule)
+            }
+        }
+    }
+}
+
 /// Soft coloured light behind the glass so the material has something to refract.
 public struct LiquidGlassBackground: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -162,5 +184,9 @@ public extension View {
 
     func liquidGlassSmallButton() -> some View {
         modifier(LiquidGlassSmallButtonModifier())
+    }
+
+    func liquidGlassIconButton(prominent: Bool = false) -> some View {
+        modifier(LiquidGlassIconButtonModifier(prominent: prominent))
     }
 }

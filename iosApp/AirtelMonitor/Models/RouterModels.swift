@@ -24,6 +24,31 @@ public enum DeviceType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// Device list filters and sort orders, same as the Android app.
+public enum DeviceFilter: CaseIterable { case all, wifi5g, wifi24g, lan
+    public var label: String {
+        switch self {
+        case .all: return "All"
+        case .wifi5g: return "5 GHz"
+        case .wifi24g: return "2.4 GHz"
+        case .lan: return "LAN"
+        }
+    }
+}
+
+public enum DeviceSort: CaseIterable { case speed, signal, name, ip
+    public var label: String {
+        switch self {
+        case .speed: return "Speed"
+        case .signal: return "Signal Quality"
+        case .name: return "Name"
+        case .ip: return "IP Address"
+        }
+    }
+}
+
+public enum ConnectionStatus { case connected, connecting, reconnecting }
+
 public struct DeviceItem: Identifiable, Equatable, Hashable {
     public var id: String { mac.isEmpty ? ip : mac }
     public let mac: String

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -133,13 +134,14 @@ fun RebootConfirmDialog(
 fun SettingsDialog(
     currentHost: String,
     currentUser: String,
+    currentPassword: String,
     currentPollInterval: Float,
     onDismiss: () -> Unit,
     onSave: (host: String, user: String, pass: String, interval: Float) -> Unit
 ) {
     var host by remember { mutableStateOf(currentHost) }
     var username by remember { mutableStateOf(currentUser) }
-    var password by remember { mutableStateOf("admin") }
+    var password by remember { mutableStateOf(currentPassword) }
     val intervalSlider = remember { SliderState(value = currentPollInterval, steps = 8, trackRange = 0.5f..5.0f) }
     val interval = intervalSlider.value
 
@@ -222,6 +224,15 @@ fun SettingsDialog(
                         )
                     )
                 }
+                val context = LocalContext.current
+                val version = remember {
+                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+                }
+                Text(
+                    text = "App version ${version ?: "?"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {

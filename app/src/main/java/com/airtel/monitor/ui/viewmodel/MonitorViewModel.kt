@@ -27,7 +27,6 @@ data class MonitorUiState(
     val renameTarget: DeviceItem? = null,
     val showRebootDialog: Boolean = false,
     val showSettingsDialog: Boolean = false,
-    val showDnsDialog: Boolean = false,
     val dnsConfig: DnsConfig = DnsConfig(),
     val dnsLoaded: Boolean = false,
     val dnsLoading: Boolean = false,
@@ -292,14 +291,8 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openDnsDialog() {
-        _uiState.update { it.copy(showDnsDialog = true, dnsLoading = true, dnsMessage = null) }
-        loadDns()
-    }
-
-    fun dismissDnsDialog() {
-        _uiState.update { it.copy(showDnsDialog = false) }
-    }
+    /** The saved router password, so the Settings dialog edits it instead of resetting it. */
+    fun storedPassword(): String = preferencesRepository.password
 
     fun loadDns() {
         viewModelScope.launch(Dispatchers.IO) {

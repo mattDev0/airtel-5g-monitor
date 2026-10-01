@@ -10,7 +10,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.airtel.monitor.data.model.ConnectionStatus
 import com.airtel.monitor.data.model.WanMetrics
 import com.airtel.monitor.data.model.CellularMetrics
@@ -33,6 +36,10 @@ fun MonitorDashboardScreen(
         }
     }
 
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    var dnsCardY by remember { mutableIntStateOf(0) }
+
     Scaffold(
         snackbarHost = {
             SnackbarHost(
@@ -49,7 +56,6 @@ fun MonitorDashboardScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        val scrollState = rememberScrollState()
 
         Column(
             modifier = modifier
@@ -68,7 +74,10 @@ fun MonitorDashboardScreen(
                 onTogglePause = { viewModel.togglePause() },
                 onForceRefresh = { viewModel.forceRefresh() },
                 onSelectPollInterval = { viewModel.setPollInterval(it) },
-                onOpenDns = { viewModel.openDnsDialog() },
+                onOpenDns = {
+                    viewModel.loadDns()
+                    scope.launch { scrollState.animateScrollTo(dnsCardY) }
+                },
                 onOpenReboot = { viewModel.openRebootDialog() },
                 onOpenSettings = { viewModel.openSettingsDialog() }
             )
@@ -139,8 +148,9 @@ fun MonitorDashboardScreen(
                 onToggle5g = { viewModel.setWifi5g(it) }
             )
 
-            // Minimal LAN DNS Card
+            // Minimal LAN DNS Card (the header's DNS button scrolls here)
             LanDnsCard(
+                modifier = Modifier.onGloballyPositioned { dnsCardY = it.positionInParent().y.toInt() },
                 dnsConfig = uiState.dnsConfig,
                 isLoaded = uiState.dnsLoaded,
                 isLoading = uiState.dnsLoading,
@@ -214,6 +224,7 @@ fun MonitorDashboardScreen(
     if (uiState.showSettingsDialog) {
         SettingsDialog(
             currentHost = uiState.routerHost,
+            currentPassword = viewModel.storedPassword(),
             currentUser = uiState.username,
             currentPollInterval = uiState.pollIntervalSeconds,
             onDismiss = { viewModel.dismissSettingsDialog() },

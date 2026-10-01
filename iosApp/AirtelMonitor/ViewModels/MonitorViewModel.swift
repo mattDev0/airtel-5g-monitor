@@ -6,6 +6,16 @@ import Combine
 public final class MonitorViewModel: ObservableObject {
     @Published public var state: RouterState = RouterState()
     @Published public var isConnected: Bool = false
+    @Published public private(set) var hasConnected: Bool = false
+    @Published public private(set) var isPaused: Bool = false
+    /// Short confirmation shown at the bottom, like Android's snackbar.
+    @Published public var toast: String? = nil
+    private var toastTask: Task<Void, Never>?
+
+    // Device list controls
+    @Published public var deviceFilter: DeviceFilter = .all
+    @Published public var deviceSort: DeviceSort = .speed
+    @Published public var deviceSearch: String = ""
     @Published public var isRefreshing: Bool = false
     @Published public var errorMessage: String? = nil
 
@@ -18,6 +28,7 @@ public final class MonitorViewModel: ObservableObject {
     // Wi-Fi state
     @Published public var wifiRadios: WifiRadioConfig = WifiRadioConfig()
     @Published public var isWifiLoading: Bool = false
+    @Published public var isWifiSaving: Bool = false
     @Published public var wifiStatusMessage: String? = nil
 
     // Network Diagnosis state
@@ -31,7 +42,6 @@ public final class MonitorViewModel: ObservableObject {
 
     // Mobile network controls
     @Published public var isNetworkBusy: Bool = false
-    @Published public var networkMessage: String? = nil
 
     // Reboot state
     @Published public var isRebooting: Bool = false
@@ -52,10 +62,11 @@ public final class MonitorViewModel: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self = self else { break }
-                await self.pollOnce()
-
-                let interval = max(1, self.settingsStore.pollIntervalSeconds)
-                try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
+                if !self.isPaused {
+                    await self.pollOnce()
+                }
+                let interval = max(0.5, self.settingsStore.pollIntervalSeconds)
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
     }
@@ -71,11 +82,85 @@ public final class MonitorViewModel: ObservableObject {
         case .success(let newState):
             self.state = newState
             self.isConnected = true
+            self.hasConnected = true
             self.errorMessage = nil
         case .failure(let error):
             self.isConnected = false
             self.errorMessage = error.localizedDescription
         }
+    }
+
+    public var connectionStatus: ConnectionStatus {
+        if isConnected { return .connected }
+        return hasConnected ? .reconnecting : .connecting
+    }
+
+    public var pollInterval: Double { settingsStore.pollIntervalSeconds }
+    public var routerHost: String { settingsStore.routerHost }
+
+    public func togglePause() {
+        isPaused.toggle()
+        showToast(isPaused ? "Telemetry paused" : "Telemetry resumed")
+        if !isPaused { Task { await pollOnce() } }
+    }
+
+    public func setPollInterval(_ seconds: Double) {
+        settingsStore.pollIntervalSeconds = min(max(seconds, 0.5), 10)
+        objectWillChange.send()
+    }
+
+    /// New host or login: drop the old session and poll with the new settings.
+    public func settingsChanged() {
+        Task {
+            await client.resetState()
+            await reloadAll()
+        }
+        showToast("Settings saved. Reconnecting...")
+    }
+
+    public func showToast(_ message: String) {
+        toast = message
+        toastTask?.cancel()
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.toast = nil
+        }
+    }
+
+    /// Devices after filter, search and sort, same rules as the Android app.
+    public var filteredDevices: [DeviceItem] {
+        let all = state.devices
+        let filtered: [DeviceItem]
+        switch deviceFilter {
+        case .all: filtered = all
+        case .wifi5g: filtered = all.filter { $0.band.localizedCaseInsensitiveContains("5 GHz") }
+        case .wifi24g: filtered = all.filter { $0.band.localizedCaseInsensitiveContains("2.4 GHz") }
+        case .lan: filtered = all.filter { $0.band.localizedCaseInsensitiveContains("LAN") || $0.band.localizedCaseInsensitiveContains("Ethernet") }
+        }
+        let q = deviceSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        let searched = q.isEmpty ? filtered : filtered.filter {
+            $0.displayName.lowercased().contains(q) || $0.hostname.lowercased().contains(q)
+                || $0.ip.contains(q) || $0.mac.lowercased().contains(q)
+        }
+        switch deviceSort {
+        case .speed: return searched.sorted { (Double($0.txRateMbps) ?? 0) > (Double($1.txRateMbps) ?? 0) }
+        case .signal: return searched.sorted { $0.signalPercent > $1.signalPercent }
+        case .name: return searched.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+        case .ip: return searched.sorted { Self.compareIps($0.ip, $1.ip) }
+        }
+    }
+
+    static func compareIps(_ a: String, _ b: String) -> Bool {
+        let pa = a.split(separator: ".").compactMap { Int($0) }
+        let pb = b.split(separator: ".").compactMap { Int($0) }
+        if pa.count == 4 && pb.count == 4 { return pa.lexicographicallyPrecedes(pb) }
+        return a < b
+    }
+
+    public func clearDiagnosisOutput() {
+        diagnosisState.output = ""
+        diagnosisState.statusMessage = nil
     }
 
     public func reloadAll() async {
@@ -137,8 +222,8 @@ public final class MonitorViewModel: ObservableObject {
         let result = await action()
         isNetworkBusy = false
         switch result {
-        case .success(let msg): networkMessage = msg
-        case .failure(let error): networkMessage = error.localizedDescription
+        case .success(let msg): showToast(msg)
+        case .failure(let error): showToast(error.localizedDescription)
         }
         await pollOnce()
     }
@@ -195,9 +280,9 @@ public final class MonitorViewModel: ObservableObject {
     }
 
     public func toggleWifi24g(enabled: Bool) async {
-        isWifiLoading = true
+        isWifiSaving = true
         wifiStatusMessage = "Switching 2.4 GHz Wi-Fi..."
-        defer { isWifiLoading = false }
+        defer { isWifiSaving = false }
 
         let result = await client.setWifi24g(enabled: enabled)
         switch result {
@@ -211,9 +296,9 @@ public final class MonitorViewModel: ObservableObject {
     }
 
     public func toggleWifi5g(enabled: Bool) async {
-        isWifiLoading = true
+        isWifiSaving = true
         wifiStatusMessage = "Switching 5 GHz Wi-Fi..."
-        defer { isWifiLoading = false }
+        defer { isWifiSaving = false }
 
         let result = await client.setWifi5g(enabled: enabled)
         switch result {

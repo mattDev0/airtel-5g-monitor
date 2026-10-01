@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// "Internet Speed" card, same layout as Android's MinimalWanSpeedCard.
 public struct HeroMetricsView: View {
     public let wan: WanMetrics
 
@@ -8,109 +9,68 @@ public struct HeroMetricsView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                // Download Speed Card
-                SpeedCard(
-                    title: "DOWNLOAD",
-                    speed: wan.downloadMbps,
-                    unit: "Mbps",
-                    peak: wan.peakDlMbps,
-                    icon: "arrow.down.circle.fill",
-                    accentColor: .blue
-                )
-
-                // Upload Speed Card
-                SpeedCard(
-                    title: "UPLOAD",
-                    speed: wan.uploadMbps,
-                    unit: "Mbps",
-                    peak: wan.peakUlMbps,
-                    icon: "arrow.up.circle.fill",
-                    accentColor: .green
-                )
-            }
-
-            // Data Flow Row
+        VStack(spacing: 16) {
             HStack {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down")
-                        .foregroundColor(.blue)
-                        .font(.caption2)
-                    Text("\(wan.dlFlowMb) MB")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
+                Text("Internet Speed").font(.headline)
                 Spacer()
-
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up")
-                        .foregroundColor(.green)
-                        .font(.caption2)
-                    Text("\(wan.ulFlowMb) MB")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    Image(systemName: "chart.bar.fill")
-                        .foregroundColor(.purple)
-                        .font(.caption2)
-                    Text("Total: \(wan.totalFlowMb) MB")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.primary)
-                }
+                Text("Total: \(wan.totalFlowMb) MB")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .liquidGlassPanel()
+            HStack(alignment: .top, spacing: 16) {
+                SpeedColumn(label: "Download", icon: "arrow.down", tint: .accentColor,
+                            mbps: wan.downloadMbps, kbps: wan.downloadKbps, peak: wan.peakDlMbps,
+                            progress: min(max(wan.downloadMbps / 100, 0.01), 1))
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(width: 1, height: 72)
+                SpeedColumn(label: "Upload", icon: "arrow.up", tint: .teal,
+                            mbps: wan.uploadMbps, kbps: wan.uploadKbps, peak: wan.peakUlMbps,
+                            progress: min(max(wan.uploadMbps / 50, 0.01), 1))
+            }
         }
+        .liquidGlassCard()
     }
 }
 
-private struct SpeedCard: View {
-    let title: String
-    let speed: Double
-    let unit: String
-    let peak: Double
+private struct SpeedColumn: View {
+    let label: String
     let icon: String
-    let accentColor: Color
+    let tint: Color
+    let mbps: Double
+    let kbps: Double
+    let peak: Double
+    let progress: Double
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .foregroundColor(accentColor)
-                    .font(.subheadline)
-                    .shadow(color: accentColor.opacity(0.5), radius: 4)
-                Text(title)
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
-                Spacer()
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(tint)
+                    .frame(width: 22, height: 22)
+                    .background(tint.opacity(0.18), in: Circle())
+                Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
-
             HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(String(format: "%.2f", speed))
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
-                Text(unit)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
+                Text(String(format: "%.2f", mbps))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                Text("Mbps").font(.caption2).foregroundStyle(.secondary)
             }
-
-            if peak > 0 {
-                Text("Peak: \(String(format: "%.1f", peak)) \(unit)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+            ProgressView(value: progress)
+                .tint(tint)
+                .animation(.easeOut(duration: 0.4), value: progress)
+            HStack {
+                Text("\(String(format: "%.0f", kbps)) kB/s")
+                Spacer(minLength: 4)
+                Text("Peak \(String(format: "%.1f", peak))M")
             }
+            .font(.caption2.monospaced())
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(tint: accentColor)
     }
 }

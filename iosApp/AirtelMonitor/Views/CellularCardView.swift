@@ -1,14 +1,16 @@
 import SwiftUI
 
+/// Cellular & cell-lock card, same layout as Android's CellularCellLockCard.
 public struct CellularCardView: View {
     public let cellular: CellularMetrics
     public let cellLock: CellLockInfo
+    public let hardware: HardwareMetrics
     public var onEditLocks: (() -> Void)?
     public var networkBusy: Bool
     public var onMobileData: ((Bool) -> Void)?
     public var onFlightMode: ((Bool) -> Void)?
     public var onRescan: (() -> Void)?
-    @State private var isExpanded: Bool = false
+    @State private var isExpanded = false
     /// Actions that cut the connection wait for a confirmation.
     @State private var pending: PendingAction?
 
@@ -18,11 +20,13 @@ public struct CellularCardView: View {
         let run: () -> Void
     }
 
-    public init(cellular: CellularMetrics, cellLock: CellLockInfo, onEditLocks: (() -> Void)? = nil,
-                networkBusy: Bool = false, onMobileData: ((Bool) -> Void)? = nil,
-                onFlightMode: ((Bool) -> Void)? = nil, onRescan: (() -> Void)? = nil) {
+    public init(cellular: CellularMetrics, cellLock: CellLockInfo, hardware: HardwareMetrics,
+                onEditLocks: (() -> Void)? = nil, networkBusy: Bool = false,
+                onMobileData: ((Bool) -> Void)? = nil, onFlightMode: ((Bool) -> Void)? = nil,
+                onRescan: (() -> Void)? = nil) {
         self.cellular = cellular
         self.cellLock = cellLock
+        self.hardware = hardware
         self.onEditLocks = onEditLocks
         self.networkBusy = networkBusy
         self.onMobileData = onMobileData
@@ -30,87 +34,73 @@ public struct CellularCardView: View {
         self.onRescan = onRescan
     }
 
+    private var isLocked: Bool {
+        cellLock.lteLockEnabled || cellLock.nrLockEnabled || cellLock.bandLock4gEnabled || cellLock.bandLock5gEnabled
+    }
+
+    private func value(_ s: String) -> String? { s.isEmpty || s == "-" ? nil : s }
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .foregroundColor(.accentColor)
-                    .font(.subheadline)
-                Text("Cellular & RF")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
+        VStack(alignment: .leading, spacing: 14) {
+            // Network badge, operator, signal
+            HStack(spacing: 10) {
+                Text(value(cellular.networkType) ?? "No Signal")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(value(cellular.operatorName) ?? "Airtel").font(.subheadline.weight(.medium))
                 Spacer()
-
-                if cellular.signalLvl > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "cellularbars", variableValue: Double(cellular.signalLvl) / 5.0)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.primary)
-                        Text("\(cellular.signalLvl)/5")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .liquidGlassPill()
-                }
-
-                Text(cellular.networkType)
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.18))
-                    .foregroundColor(.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .liquidGlassSmallButton()
+                SignalBars(level: cellular.signalLvl, rsrp: cellular.rsrp5g)
             }
 
-            // Radio Grid
+            // Band / Cell / Temp / CPU (SINR when hardware stats are missing)
             HStack(spacing: 8) {
-                MetricPill(title: "5G RSRP", value: cellular.rsrp5g, unit: "dBm")
-                MetricPill(title: "5G SINR", value: cellular.sinr5g, unit: "dB")
-                MetricPill(title: "4G RSRP", value: cellular.rsrp4g, unit: "dBm")
-                MetricPill(title: "4G SINR", value: cellular.sinr4g, unit: "dB")
+                AppTelemetryPill(label: "Band", value: value(cellLock.currentBand5g).map { "n\($0)" } ?? "-")
+                AppTelemetryPill(label: "Cell", value: value(cellLock.servingPci5g).map { "PCI \($0)" } ?? "-")
+                if let temp = value(hardware.temperature), temp != "--" {
+                    AppTelemetryPill(label: "Temp", value: "\(temp)°C")
+                    AppTelemetryPill(label: "CPU", value: "\(Int(hardware.cpuUsage))%")
+                } else {
+                    AppTelemetryPill(label: "SINR", value: value(cellular.sinr5g).map { "\($0) dB" } ?? "-")
+                }
             }
+
+            // Cell lock status and details toggle
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(isLocked ? StatusColors.warning : StatusColors.success).frame(width: 8, height: 8)
+                    Text(isLocked ? "Cell Lock Active" : "Cell Lock: Auto (Default)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(isExpanded ? "Hide details" : "Details").font(.caption.weight(.semibold))
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down").font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(Color.accentColor)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             if isExpanded {
-                Divider()
-                    .opacity(0.4)
-
                 VStack(spacing: 8) {
-                    DetailRow(label: "Carrier", value: cellular.operatorName)
-                    DetailRow(label: "Hardware", value: "\(cellular.boardType) / \(cellular.iduType)")
-                    DetailRow(label: "CQI / QAM", value: "5G: \(cellular.nrCqi) (\(cellular.nrQamDl)) • 4G: \(cellular.lteCqi)")
-                    DetailRow(label: "5G Band & PCI", value: "Band: \(cellLock.currentBand5g) • PCI: \(cellLock.servingPci5g) (ARFCN \(cellLock.servingFreq5g))")
-                    DetailRow(label: "4G Band & PCI", value: "Band: \(cellLock.currentBands4g) • PCI: \(cellLock.servingPci4g) (EARFCN \(cellLock.servingFreq4g))")
-
-                    HStack {
-                        Text("Cell Lock Status")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(cellLock.nrLockEnabled && cellLock.lteLockEnabled ? "4G + 5G Locked"
-                             : cellLock.nrLockEnabled ? "5G Locked"
-                             : cellLock.lteLockEnabled ? "4G Locked" : "Auto (Unlocked)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(cellLock.nrLockEnabled || cellLock.lteLockEnabled ? .orange : .green)
-                    }
+                    AppDetailRow(title: "5G Serving EARFCN/ARFCN", value: cellLock.servingFreq5g)
+                    AppDetailRow(title: "4G Serving PCI / EARFCN", value: "\(cellLock.servingPci4g) / \(cellLock.servingFreq4g)")
+                    AppDetailRow(title: "4G Active Bands",
+                                 value: value(cellLock.currentBands4g).map { "B" + $0.replacingOccurrences(of: "+", with: " + B") } ?? "-")
+                    AppDetailRow(title: "4G Signal (RSRP / SINR)", value: "\(cellular.rsrp4g) dBm / \(cellular.sinr4g) dB")
+                    AppDetailRow(title: "5G CQI / 4G CQI", value: "\(cellular.nrCqi) / \(cellular.lteCqi)")
+                    AppDetailRow(title: "4G Cell Lock",
+                                 value: cellLock.lteLockEnabled ? "PCI \(cellLock.lteLockPci) @ \(cellLock.lteLockFreq)" : "Auto")
+                    AppDetailRow(title: "5G Cell Lock",
+                                 value: cellLock.nrLockEnabled ? "PCI \(cellLock.nrLockPci) @ \(cellLock.nrLockFreq)" : "Auto")
                 }
-                .padding(10)
+                .padding(12)
                 .liquidGlassPill()
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if let onMobileData, let onFlightMode {
@@ -181,6 +171,28 @@ public struct CellularCardView: View {
     }
 }
 
+/// "-95 dBm" plus four bars, like Android's signal indicator.
+private struct SignalBars: View {
+    static let heights: [CGFloat] = [4, 7, 10, 14]
+    let level: Int
+    let rsrp: String
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            if !rsrp.isEmpty && rsrp != "-" {
+                Text("\(rsrp) dBm").font(.caption2.monospaced()).foregroundStyle(.secondary)
+            }
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<4, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(i < level ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .frame(width: 3, height: Self.heights[i])
+                }
+            }
+        }
+    }
+}
+
 /// Compact labelled switch; greyed out until the router has reported the state.
 private struct NetworkToggle: View {
     let title: String
@@ -201,49 +213,3 @@ private struct NetworkToggle: View {
         .liquidGlassPill()
     }
 }
-
-private struct MetricPill: View {
-    let title: String
-    let value: String
-    let unit: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.secondary)
-            HStack(spacing: 2) {
-                Text(value)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
-                if !value.contains("-") && !value.isEmpty {
-                    Text(unit)
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassPill()
-    }
-}
-
-private struct DetailRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Spacer()
-            Text(value)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.primary)
-        }
-    }
-}
-

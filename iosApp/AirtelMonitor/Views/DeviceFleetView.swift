@@ -1,153 +1,162 @@
 import SwiftUI
+import UIKit
 
+/// "Connected Devices" card, same layout as Android's DeviceFleetSection:
+/// count, search, sort, band filter, and per-device copy-IP and rename.
 public struct DeviceFleetView: View {
     @ObservedObject var viewModel: MonitorViewModel
-    @State private var selectedDeviceForAlias: DeviceItem? = nil
-    @State private var aliasInput: String = ""
+    @State private var searchVisible = false
+    @State private var renaming: DeviceItem?
+    @State private var aliasInput = ""
 
     public init(viewModel: MonitorViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "laptopcomputer.and.iphone")
-                    .foregroundColor(.accentColor)
-                    .font(.subheadline)
-                Text("Connected Fleet")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-
-                Text("\(viewModel.state.devices.count)")
-                    .font(.system(size: 11, weight: .bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.accentColor.opacity(0.18))
-                    .foregroundColor(.accentColor)
-                    .clipShape(Capsule())
-
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Text("Connected Devices").font(.headline)
+                AppBadge(text: "\(viewModel.state.devices.count)", color: .accentColor)
                 Spacer()
+                Button {
+                    searchVisible.toggle()
+                    if !searchVisible { viewModel.deviceSearch = "" }
+                } label: {
+                    Image(systemName: searchVisible ? "xmark" : "magnifyingglass").font(.system(size: 15))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Toggle Search")
+                Menu {
+                    ForEach(DeviceSort.allCases, id: \.self) { sort in
+                        Button {
+                            viewModel.deviceSort = sort
+                        } label: {
+                            if sort == viewModel.deviceSort {
+                                Label(sort.label, systemImage: "checkmark")
+                            } else {
+                                Text(sort.label)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down").font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 8)
+                }
+                .accessibilityLabel("Sort")
             }
 
-            if viewModel.state.devices.isEmpty {
-                Text(viewModel.isConnected ? "No active devices found on DHCP" : "Connect to router to view devices")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.vertical, 8)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(viewModel.state.devices) { device in
-                        DeviceRow(device: device) {
-                            aliasInput = device.alias
-                            selectedDeviceForAlias = device
+            if searchVisible {
+                TextField("Search by name, IP, or MAC...", text: $viewModel.deviceSearch)
+                    .font(.subheadline)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .liquidGlassPill()
+                    .transition(.opacity)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(DeviceFilter.allCases, id: \.self) { filter in
+                        let selected = viewModel.deviceFilter == filter
+                        Button {
+                            viewModel.deviceFilter = filter
+                        } label: {
+                            Text(filter.label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(selected ? Color.accentColor : .primary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(selected ? Color.accentColor.opacity(0.18) : Color.clear, in: Capsule())
                         }
+                        .buttonStyle(.plain)
+                        .liquidGlassPill(cornerRadius: 50)
+                    }
+                }
+            }
+
+            VStack(spacing: 8) {
+                ForEach(viewModel.filteredDevices) { device in
+                    DeviceRow(device: device) {
+                        UIPasteboard.general.string = device.ip
+                        viewModel.showToast("Copied \(device.ip)")
+                    } onRename: {
+                        aliasInput = device.alias
+                        renaming = device
                     }
                 }
             }
         }
         .liquidGlassCard()
-        .alert("Rename Device", isPresented: Binding(
-            get: { selectedDeviceForAlias != nil },
-            set: { if !$0 { selectedDeviceForAlias = nil } }
-        )) {
-            TextField("Device nickname", text: $aliasInput)
-            Button("Cancel", role: .cancel) { selectedDeviceForAlias = nil }
+        .alert("Rename Device", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("e.g. My Phone, Living Room TV", text: $aliasInput)
+            Button("Cancel", role: .cancel) { renaming = nil }
             Button("Save") {
-                if let dev = selectedDeviceForAlias {
-                    let id = dev.mac.isEmpty ? dev.ip : dev.mac
-                    viewModel.setDeviceAlias(identifier: id, alias: aliasInput)
+                if let d = renaming {
+                    viewModel.setDeviceAlias(identifier: d.mac.isEmpty ? d.ip : d.mac, alias: aliasInput)
+                    viewModel.showToast("Device renamed to \"\(aliasInput)\"")
                 }
-                selectedDeviceForAlias = nil
+                renaming = nil
             }
         } message: {
-            if let dev = selectedDeviceForAlias {
-                Text("Enter a friendly nickname for \(dev.hostname) (\(dev.ip)).")
-            }
+            if let d = renaming { Text("\(d.ip) • \(d.mac)") }
         }
     }
 }
 
 private struct DeviceRow: View {
     let device: DeviceItem
+    let onCopyIp: () -> Void
     let onRename: () -> Void
+
+    private var bandLabel: String {
+        if device.band.localizedCaseInsensitiveContains("LAN") || device.band.localizedCaseInsensitiveContains("Ethernet") {
+            return "LAN"
+        }
+        return device.band.localizedCaseInsensitiveContains("5 GHz") ? "5 GHz" : "2.4 GHz"
+    }
+
+    private var speedLabel: String {
+        let rate = device.txRateMbps
+        return rate.isEmpty || rate == "-" || rate == "0" ? "" : " • \(rate) Mbps"
+    }
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: device.type.sfSymbol)
-                .font(.system(size: 16))
-                .foregroundColor(.accentColor)
-                .frame(width: 34, height: 34)
-                .liquidGlassPill()
-
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 36, height: 36)
+                .background(Color.secondary.opacity(0.15), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(device.displayName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-
-                    if !device.alias.isEmpty {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-
-                    if device.isRouter {
-                        Text("GATEWAY")
-                            .font(.system(size: 8, weight: .bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.25))
-                            .foregroundColor(.orange)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-                }
-
-                HStack(spacing: 6) {
-                    Text(device.ip)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("•")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text(device.band)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
+                Text(device.displayName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text("\(device.ip) • \(bandLabel)\(speedLabel)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                if device.signalPercent > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "wifi")
-                            .font(.system(size: 10))
-                            .foregroundColor(device.signalPercent > 60 ? .green : (device.signalPercent > 30 ? .orange : .red))
-                        Text("\(device.signalPercent)%")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if device.txRateMbps != "-" && device.txRateMbps.isNotEmpty {
-                    Text("\(device.txRateMbps) Mbps")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
+            Spacer(minLength: 4)
+            Button(action: onCopyIp) {
+                Image(systemName: "doc.on.doc").font(.system(size: 13))
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .frame(width: 30, height: 30)
+            .accessibilityLabel("Copy IP")
+            Button(action: onRename) {
+                Image(systemName: "pencil").font(.system(size: 13))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .frame(width: 30, height: 30)
+            .accessibilityLabel("Rename")
         }
-        .padding(10)
-        .liquidGlassPill()
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onRename()
-        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .liquidGlassPill(cornerRadius: 14)
     }
-}
-
-private extension String {
-    var isNotEmpty: Bool { !self.isEmpty }
 }

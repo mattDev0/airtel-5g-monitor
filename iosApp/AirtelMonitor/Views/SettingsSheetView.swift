@@ -1,70 +1,55 @@
 import SwiftUI
 
+/// Router Settings, same fields as Android's SettingsDialog.
 public struct SettingsSheetView: View {
     @ObservedObject var settingsStore: SettingsStore = .shared
+    var onSaved: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
 
-    @State private var host: String = ""
-    @State private var user: String = ""
-    @State private var pass: String = ""
-    @State private var interval: Int = 2
+    @State private var host = ""
+    @State private var user = ""
+    @State private var pass = ""
+    @State private var interval: Double = 2
 
-    public init() {}
+    public init(onSaved: @escaping () -> Void = {}) {
+        self.onSaved = onSaved
+    }
 
     public var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Router Connection")) {
-                    HStack {
-                        Text("IP Address")
-                        Spacer()
+                Section {
+                    LabeledContent("Gateway IP") {
                         TextField("192.168.1.1", text: $host)
                             .multilineTextAlignment(.trailing)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
                             .keyboardType(.numbersAndPunctuation)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
-
-                    HStack {
-                        Text("Username")
-                        Spacer()
+                    LabeledContent("Username") {
                         TextField("root", text: $user)
                             .multilineTextAlignment(.trailing)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
-
-                    HStack {
-                        Text("Password")
-                        Spacer()
+                    LabeledContent("Password") {
                         SecureField("admin", text: $pass)
                             .multilineTextAlignment(.trailing)
                     }
                 }
 
-                Section(header: Text("Telemetry Polling")) {
-                    Stepper("Interval: \(interval) second\(interval == 1 ? "" : "s")", value: $interval, in: 1...10)
-                    Text("Faster intervals provide more responsive speed readings but use slightly more router CPU.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-
-                Section(header: Text("About")) {
-                    HStack {
-                        Text("App Version")
-                        Spacer()
-                        Text(appVersion)
-                            .foregroundColor(.secondary)
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Poll Rate: \(String(format: "%.1f", interval))s")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Slider(value: $interval, in: 0.5...5.0, step: 0.5)
                     }
-                    HStack {
-                        Text("Supported Hardware")
-                        Spacer()
-                        Text("ZLT X17M & W304VA PRO")
-                            .foregroundColor(.secondary)
-                    }
+                } footer: {
+                    Text("App version \(appVersion)")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Router Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -72,10 +57,16 @@ public struct SettingsSheetView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        saveSettings()
+                        settingsStore.routerHost = host.trimmingCharacters(in: .whitespaces)
+                            .replacingOccurrences(of: "http://", with: "")
+                            .replacingOccurrences(of: "https://", with: "")
+                        settingsStore.username = user.trimmingCharacters(in: .whitespaces)
+                        settingsStore.password = pass
+                        settingsStore.pollIntervalSeconds = interval
+                        onSaved()
                         dismiss()
                     }
-                    .fontWeight(.bold)
+                    .disabled(host.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
             .onAppear {
@@ -85,13 +76,6 @@ public struct SettingsSheetView: View {
                 interval = settingsStore.pollIntervalSeconds
             }
         }
-    }
-
-    private func saveSettings() {
-        settingsStore.routerHost = host.trimmingCharacters(in: .whitespaces)
-        settingsStore.username = user.trimmingCharacters(in: .whitespaces)
-        settingsStore.password = pass
-        settingsStore.pollIntervalSeconds = interval
     }
 
     private var appVersion: String {
