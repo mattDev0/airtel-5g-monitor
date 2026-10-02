@@ -169,6 +169,9 @@ private struct CellLockSections: View {
     @State private var newArfcn = ""
     @State private var newNrPci = ""
     @State private var pendingApply: (() -> Void)?
+    /// Index of the cell loaded into the input row for editing; nil when the row adds a new cell.
+    @State private var editingLte: Int?
+    @State private var editingNr: Int?
 
     init(config: CellLockConfig, isNsa: Bool, isSaving: Bool,
          onSaveLte: @escaping (Bool, [LteLockCell]) -> Void, onSaveNr: @escaping (Bool, [NrLockCell]) -> Void) {
@@ -199,10 +202,19 @@ private struct CellLockSections: View {
         Section {
             Toggle("Lock 4G cell", isOn: $lteOn)
             if lteOn {
-                ForEach(lteCells, id: \.self) { cell in
-                    CellRow(main: "EARFCN \(cell.earfcn)", detail: "PCI \(cell.pci.isEmpty ? "any" : cell.pci)")
+                ForEach(Array(lteCells.enumerated()), id: \.offset) { index, cell in
+                    Button {
+                        newEarfcn = cell.earfcn; newLtePci = cell.pci; editingLte = index
+                    } label: {
+                        CellRow(main: "EARFCN \(cell.earfcn)", detail: "PCI \(cell.pci.isEmpty ? "any" : cell.pci)")
+                    }
+                    .foregroundStyle(.primary)
+                    .listRowBackground(editingLte == index ? Color.accentColor.opacity(0.15) : nil)
                 }
-                .onDelete { lteCells.remove(atOffsets: $0) }
+                .onDelete { offsets in
+                    lteCells.remove(atOffsets: offsets)
+                    editingLte = nil; newEarfcn = ""; newLtePci = ""
+                }
 
                 if let current = config.current4g, !lteCells.contains(current) {
                     Button { lteCells.append(current) } label: {
@@ -213,10 +225,19 @@ private struct CellLockSections: View {
                     TextField("EARFCN", text: $newEarfcn).keyboardType(.numberPad)
                     TextField("PCI (optional)", text: $newLtePci).keyboardType(.numberPad)
                     Button {
-                        lteCells.append(LteLockCell(earfcn: newEarfcn, pci: newLtePci))
-                        newEarfcn = ""; newLtePci = ""
-                    } label: { Image(systemName: "plus.circle.fill") }
+                        let cell = LteLockCell(earfcn: newEarfcn, pci: newLtePci)
+                        if let i = editingLte, i < lteCells.count { lteCells[i] = cell } else { lteCells.append(cell) }
+                        newEarfcn = ""; newLtePci = ""; editingLte = nil
+                    } label: { Image(systemName: editingLte == nil ? "plus.circle.fill" : "checkmark.circle.fill") }
+                    .buttonStyle(.borderless)
                     .disabled(newEarfcn.isEmpty)
+                    if editingLte != nil {
+                        Button {
+                            newEarfcn = ""; newLtePci = ""; editingLte = nil
+                        } label: { Image(systemName: "xmark.circle") }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
             Button(lteOn ? "Apply 4G Lock" : "Unlock 4G (router picks the cell)") {
@@ -233,10 +254,19 @@ private struct CellLockSections: View {
         Section {
             Toggle("Lock 5G cell", isOn: $nrOn)
             if nrOn {
-                ForEach(nrCells, id: \.self) { cell in
-                    CellRow(main: "n\(cell.band) · ARFCN \(cell.arfcn)", detail: "PCI \(cell.pci.isEmpty ? "any" : cell.pci)")
+                ForEach(Array(nrCells.enumerated()), id: \.offset) { index, cell in
+                    Button {
+                        newBand = cell.band; newArfcn = cell.arfcn; newNrPci = cell.pci; editingNr = index
+                    } label: {
+                        CellRow(main: "n\(cell.band) · ARFCN \(cell.arfcn)", detail: "PCI \(cell.pci.isEmpty ? "any" : cell.pci)")
+                    }
+                    .foregroundStyle(.primary)
+                    .listRowBackground(editingNr == index ? Color.accentColor.opacity(0.15) : nil)
                 }
-                .onDelete { nrCells.remove(atOffsets: $0) }
+                .onDelete { offsets in
+                    nrCells.remove(atOffsets: offsets)
+                    editingNr = nil; newBand = ""; newArfcn = ""; newNrPci = ""
+                }
 
                 if let current = config.current5g, !nrCells.contains(current) {
                     Button { nrCells.append(current) } label: {
@@ -248,10 +278,19 @@ private struct CellLockSections: View {
                     TextField("ARFCN", text: $newArfcn).keyboardType(.numberPad)
                     TextField("PCI", text: $newNrPci).keyboardType(.numberPad).frame(maxWidth: 60)
                     Button {
-                        nrCells.append(NrLockCell(band: newBand, arfcn: newArfcn, pci: newNrPci))
-                        newBand = ""; newArfcn = ""; newNrPci = ""
-                    } label: { Image(systemName: "plus.circle.fill") }
+                        let cell = NrLockCell(band: newBand, arfcn: newArfcn, pci: newNrPci)
+                        if let i = editingNr, i < nrCells.count { nrCells[i] = cell } else { nrCells.append(cell) }
+                        newBand = ""; newArfcn = ""; newNrPci = ""; editingNr = nil
+                    } label: { Image(systemName: editingNr == nil ? "plus.circle.fill" : "checkmark.circle.fill") }
+                    .buttonStyle(.borderless)
                     .disabled(newBand.isEmpty || newArfcn.isEmpty)
+                    if editingNr != nil {
+                        Button {
+                            newBand = ""; newArfcn = ""; newNrPci = ""; editingNr = nil
+                        } label: { Image(systemName: "xmark.circle") }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
             Button(nrOn ? "Apply 5G Lock" : "Unlock 5G (router picks the cell)") {

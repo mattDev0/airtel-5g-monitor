@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
@@ -250,7 +251,9 @@ private fun CellLockTab(
         onEnabledChange = { lteOn = it },
         current = config.current4g?.let { "Now on EARFCN ${it.earfcn} · PCI ${it.pci}" },
         rows = lteCells.map { "EARFCN ${it.earfcn}" to "PCI ${it.pci.ifEmpty { "any" }}" },
+        rowValues = lteCells.map { listOf(it.earfcn, it.pci) },
         onRemove = { i -> lteCells = lteCells.filterIndexed { j, _ -> j != i } },
+        onReplace = { i, v -> lteCells = lteCells.mapIndexed { j, c -> if (j == i) LteLockCell(v[0], v[1]) else c } },
         onUseCurrent = config.current4g?.takeIf { it !in lteCells }?.let { cur -> { lteCells = lteCells + cur } },
         addFields = listOf("EARFCN", "PCI (optional)"),
         onAdd = { v -> lteCells = lteCells + LteLockCell(v[0], v[1]) },
@@ -266,7 +269,9 @@ private fun CellLockTab(
         onEnabledChange = { nrOn = it },
         current = config.current5g?.let { "Now on n${it.band} · ARFCN ${it.arfcn} · PCI ${it.pci}" },
         rows = nrCells.map { "n${it.band} · ARFCN ${it.arfcn}" to "PCI ${it.pci.ifEmpty { "any" }}" },
+        rowValues = nrCells.map { listOf(it.band, it.arfcn, it.pci) },
         onRemove = { i -> nrCells = nrCells.filterIndexed { j, _ -> j != i } },
+        onReplace = { i, v -> nrCells = nrCells.mapIndexed { j, c -> if (j == i) NrLockCell(v[0], v[1], v[2]) else c } },
         onUseCurrent = config.current5g?.takeIf { it !in nrCells }?.let { cur -> { nrCells = nrCells + cur } },
         addFields = listOf("Band (e.g. 78)", "ARFCN", "PCI (optional)"),
         onAdd = { v -> nrCells = nrCells + NrLockCell(v[0], v[1], v[2]) },
@@ -292,7 +297,9 @@ private fun CellSection(
     onEnabledChange: (Boolean) -> Unit,
     current: String?,
     rows: List<Pair<String, String>>,
+    rowValues: List<List<String>>,
     onRemove: (Int) -> Unit,
+    onReplace: (Int, List<String>) -> Unit,
     onUseCurrent: (() -> Unit)?,
     addFields: List<String>,
     onAdd: (List<String>) -> Unit,
@@ -301,7 +308,14 @@ private fun CellSection(
     onSave: () -> Unit
 ) {
     var adding by remember { mutableStateOf(false) }
+    // Index of the cell being edited, or null when the form adds a new one.
+    var editing by remember { mutableStateOf<Int?>(null) }
     val inputs = remember(addFields) { mutableStateListOf(*Array(addFields.size) { "" }) }
+    fun closeForm() {
+        for (i in inputs.indices) inputs[i] = ""
+        adding = false
+        editing = null
+    }
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -329,12 +343,26 @@ private fun CellSection(
 
             if (enabled) {
                 rows.forEachIndexed { i, (main, sub) ->
-                    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+                    val startEdit = {
+                        rowValues.getOrNull(i)?.forEachIndexed { k, v -> if (k < inputs.size) inputs[k] = v }
+                        editing = i
+                        adding = true
+                    }
+                    Surface(
+                        onClick = startEdit,
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (editing == i) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainerHighest
+                    ) {
                         Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(main, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
                             Text(sub, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            IconButton(onClick = { onRemove(i) }) { Icon(Icons.Default.Close, contentDescription = "Remove") }
+                            IconButton(onClick = startEdit) { Icon(Icons.Default.Edit, contentDescription = "Edit") }
+                            IconButton(onClick = {
+                                if (editing == i) closeForm()
+                                onRemove(i)
+                            }) { Icon(Icons.Default.Close, contentDescription = "Remove") }
                         }
                     }
                 }
@@ -347,7 +375,7 @@ private fun CellSection(
                             Text("Use current cell")
                         }
                     }
-                    OutlinedButton(onClick = { adding = !adding }, shapes = ButtonDefaults.shapes()) {
+                    OutlinedButton(onClick = { if (adding) closeForm() else adding = true }, shapes = ButtonDefaults.shapes()) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                         Text("Add manually")
@@ -366,14 +394,17 @@ private fun CellSection(
                         )
                     }
                     val required = addFields.indices.filter { !addFields[it].contains("optional") }
-                    TextButton(
-                        onClick = {
-                            onAdd(inputs.toList())
-                            for (i in inputs.indices) inputs[i] = ""
-                            adding = false
-                        },
-                        enabled = required.all { inputs[it].isNotBlank() }
-                    ) { Text("Add to list") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = {
+                                val index = editing
+                                if (index != null) onReplace(index, inputs.toList()) else onAdd(inputs.toList())
+                                closeForm()
+                            },
+                            enabled = required.all { inputs[it].isNotBlank() }
+                        ) { Text(if (editing != null) "Save changes" else "Add to list") }
+                        TextButton(onClick = { closeForm() }) { Text("Cancel") }
+                    }
                 }
             }
 
