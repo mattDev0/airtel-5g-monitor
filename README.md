@@ -16,6 +16,19 @@ Ships in four forms. The desktop and Termux versions share one Python core
 | **Android app** | `app/` (native Kotlin + Compose) | APK from Releases, or build in Android Studio ([docs](docs/ANDROID_BUILD.md)) |
 | **iOS app** | `iosApp/` (native SwiftUI) | IPA from Releases, sideload with SideStore/AltStore/Sideloadly ([docs](docs/IOS_BUILD.md)) |
 
+## Screenshots
+
+Live from the Android and iOS apps. Wi-Fi names are masked.
+
+| Android | iOS |
+|---|---|
+| <img src="docs/screenshots/android-dashboard.png" alt="Android dashboard" width="270"> | <img src="docs/screenshots/ios-dashboard.png" alt="iOS dashboard" width="270"> |
+| <img src="docs/screenshots/android-wifi-dns.png" alt="Android Wi-Fi radios and LAN DNS" width="270"> | <img src="docs/screenshots/ios-wifi-dns.png" alt="iOS Wi-Fi radios and LAN DNS" width="270"> |
+
+Network diagnostics run ping and traceroute from the router itself:
+
+<img src="docs/screenshots/android-diagnostics.png" alt="Network diagnostics on Android" width="270">
+
 ## Layout
 ```
 desktop/          Laptop app: server.py, router_client.py, static/ (web UI)
