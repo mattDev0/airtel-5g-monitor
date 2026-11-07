@@ -40,6 +40,44 @@ public struct CellularCardView: View {
 
     private func value(_ s: String) -> String? { s.isEmpty || s == "-" ? nil : s }
 
+    private func formatBands(_ raw: String, prefix: String) -> String {
+        let items = raw.split(separator: "+")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0 != "-" }
+            .map { s -> String in
+                if s.lowercased().hasPrefix(prefix.lowercased()) {
+                    return prefix + s.dropFirst(prefix.count)
+                }
+                return prefix + s
+            }
+            .filter { $0.count > prefix.count }
+        return items.isEmpty ? "-" : items.joined(separator: "+")
+    }
+
+    private var bandPillValue: String {
+        if let b5 = value(cellLock.currentBand5g) {
+            let formatted = formatBands(b5, prefix: "n")
+            if formatted != "-" { return formatted }
+        }
+        if let b4 = value(cellLock.currentBands4g) {
+            let formatted = formatBands(b4, prefix: "B")
+            if formatted != "-" { return formatted }
+        }
+        return "-"
+    }
+
+    private var cellPillValue: String {
+        if let p5 = value(cellLock.servingPci5g) {
+            let clean = p5.replacingOccurrences(of: "^(?i)pci\\s*", with: "", options: .regularExpression)
+            return "PCI \(clean)"
+        }
+        if let p4 = value(cellLock.servingPci4g) {
+            let clean = p4.replacingOccurrences(of: "^(?i)pci\\s*", with: "", options: .regularExpression)
+            return "PCI \(clean)"
+        }
+        return "-"
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Network badge, operator, signal
@@ -57,8 +95,8 @@ public struct CellularCardView: View {
 
             // Band / Cell / Temp / CPU (SINR when hardware stats are missing)
             HStack(spacing: 8) {
-                AppTelemetryPill(label: "Band", value: value(cellLock.currentBand5g).map { "n\($0)" } ?? "-")
-                AppTelemetryPill(label: "Cell", value: value(cellLock.servingPci5g).map { "PCI \($0)" } ?? "-")
+                AppTelemetryPill(label: "Band", value: bandPillValue)
+                AppTelemetryPill(label: "Cell", value: cellPillValue)
                 if let temp = value(hardware.temperature), temp != "--" {
                     AppTelemetryPill(label: "Temp", value: "\(temp)°C")
                     AppTelemetryPill(label: "CPU", value: "\(Int(hardware.cpuUsage))%")
@@ -90,7 +128,14 @@ public struct CellularCardView: View {
                     AppDetailRow(title: "5G Serving EARFCN/ARFCN", value: cellLock.servingFreq5g)
                     AppDetailRow(title: "4G Serving PCI / EARFCN", value: "\(cellLock.servingPci4g) / \(cellLock.servingFreq4g)")
                     AppDetailRow(title: "4G Active Bands",
-                                 value: value(cellLock.currentBands4g).map { "B" + $0.replacingOccurrences(of: "+", with: " + B") } ?? "-")
+                                 value: value(cellLock.currentBands4g).map { raw in
+                                     let formatted = raw.split(separator: "+")
+                                         .map { $0.trimmingCharacters(in: .whitespaces) }
+                                         .filter { !$0.isEmpty && $0 != "-" }
+                                         .map { s in s.lowercased().hasPrefix("b") ? "B" + s.dropFirst() : "B" + s }
+                                         .joined(separator: " + ")
+                                     return formatted.isEmpty ? "-" : formatted
+                                 } ?? "-")
                     AppDetailRow(title: "4G Signal (RSRP / SINR)", value: "\(cellular.rsrp4g) dBm / \(cellular.sinr4g) dB")
                     AppDetailRow(title: "5G CQI / 4G CQI", value: "\(cellular.nrCqi) / \(cellular.lteCqi)")
                     AppDetailRow(title: "4G Cell Lock",

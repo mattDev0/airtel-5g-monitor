@@ -104,11 +104,41 @@ fun CellularCellLockCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val band5g = if (cellLock.currentBand5g.isNotEmpty() && cellLock.currentBand5g != "-") "n${cellLock.currentBand5g}" else "-"
-                val pci = if (cellLock.servingPci5g.isNotEmpty() && cellLock.servingPci5g != "-") "PCI ${cellLock.servingPci5g}" else "-"
+                fun formatBands(raw: String, prefix: String): String {
+                    val items = raw.split("+")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() && it != "-" }
+                        .map { prefix + it.removePrefix(prefix.lowercase()).removePrefix(prefix.uppercase()) }
+                        .filter { it.length > prefix.length }
+                    return if (items.isEmpty()) "-" else items.joinToString("+")
+                }
 
-                TelemetryPill(label = "Band", value = band5g, modifier = Modifier.weight(1f))
-                TelemetryPill(label = "Cell", value = pci, modifier = Modifier.weight(1f))
+                val bandText = when {
+                    cellLock.currentBand5g.isNotBlank() && cellLock.currentBand5g != "-" -> {
+                        val formatted = formatBands(cellLock.currentBand5g, "n")
+                        if (formatted != "-") formatted else "-"
+                    }
+                    cellLock.currentBands4g.isNotBlank() && cellLock.currentBands4g != "-" -> {
+                        val formatted = formatBands(cellLock.currentBands4g, "B")
+                        if (formatted != "-") formatted else "-"
+                    }
+                    else -> "-"
+                }
+
+                val pciText = when {
+                    cellLock.servingPci5g.isNotBlank() && cellLock.servingPci5g != "-" -> {
+                        val clean = cellLock.servingPci5g.removePrefix("PCI").removePrefix("pci").trim()
+                        "PCI $clean"
+                    }
+                    cellLock.servingPci4g.isNotBlank() && cellLock.servingPci4g != "-" -> {
+                        val clean = cellLock.servingPci4g.removePrefix("PCI").removePrefix("pci").trim()
+                        "PCI $clean"
+                    }
+                    else -> "-"
+                }
+
+                TelemetryPill(label = "Band", value = bandText, modifier = Modifier.weight(1f))
+                TelemetryPill(label = "Cell", value = pciText, modifier = Modifier.weight(1f))
 
                 if (hardware != null && hardware.temperature.isNotEmpty() && hardware.temperature != "--") {
                     TelemetryPill(label = "Temp", value = "${hardware.temperature}°C", modifier = Modifier.weight(1f))
@@ -181,7 +211,16 @@ fun CellularCellLockCard(
                 ) {
                     DetailRow(title = "5G Serving EARFCN/ARFCN", value = cellLock.servingFreq5g)
                     DetailRow(title = "4G Serving PCI / EARFCN", value = "${cellLock.servingPci4g} / ${cellLock.servingFreq4g}")
-                    DetailRow(title = "4G Active Bands", value = if (cellLock.currentBands4g.isNotEmpty()) "B${cellLock.currentBands4g.replace("+", " + B")}" else "-")
+                    DetailRow(
+                        title = "4G Active Bands",
+                        value = if (cellLock.currentBands4g.isNotBlank() && cellLock.currentBands4g != "-") {
+                            val formatted = cellLock.currentBands4g.split("+")
+                                .map { it.trim().removePrefix("b").removePrefix("B") }
+                                .filter { it.isNotEmpty() && it != "-" }
+                                .joinToString(" + ") { "B$it" }
+                            if (formatted.isNotEmpty()) formatted else "-"
+                        } else "-"
+                    )
                     DetailRow(title = "4G Signal (RSRP / SINR)", value = "${cellular.rsrp4g} dBm / ${cellular.sinr4g} dB")
                     DetailRow(title = "5G CQI / 4G CQI", value = "${cellular.nrCqi} / ${cellular.lteCqi}")
                     DetailRow(
@@ -327,7 +366,8 @@ private fun TelemetryPill(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
             )
         }
     }
