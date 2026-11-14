@@ -1,6 +1,12 @@
 package com.airtel.monitor.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -8,11 +14,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.airtel.monitor.data.model.ConnectionStatus
 import com.airtel.monitor.data.model.WanMetrics
@@ -36,13 +44,18 @@ fun MonitorDashboardScreen(
         }
     }
 
-    val scrollState = rememberScrollState()
+    // One scroll position per tab so switching tabs doesn't lose your place.
+    val scrollStates = Array(DashTab.entries.size) { rememberScrollState() }
     val scope = rememberCoroutineScope()
     var dnsCardY by remember { mutableIntStateOf(0) }
+    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val barClearance = GlassNavBarHeight + navBottom + 12.dp
 
     Scaffold(
         snackbarHost = {
             SnackbarHost(
+                modifier = Modifier.padding(bottom = barClearance + 8.dp),
                 hostState = snackbarHostState,
                 snackbar = { data ->
                     Snackbar(
@@ -57,15 +70,10 @@ fun MonitorDashboardScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
 
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Top Header Bar
+        val rState = uiState.routerState
+
+        // Header + offline banner, repeated at the top of every tab.
+        val topSection: @Composable () -> Unit = {
             HeaderBar(
                 connectionStatus = uiState.connectionStatus,
                 isPaused = uiState.isPaused,
@@ -76,13 +84,16 @@ fun MonitorDashboardScreen(
                 onSelectPollInterval = { viewModel.setPollInterval(it) },
                 onOpenDns = {
                     viewModel.loadDns()
-                    scope.launch { scrollState.animateScrollTo(dnsCardY) }
+                    tabIndex = DashTab.Network.ordinal
+                    scope.launch {
+                        delay(350) // let the Network tab compose and measure the DNS card
+                        scrollStates[DashTab.Network.ordinal].animateScrollTo(dnsCardY)
+                    }
                 },
                 onOpenReboot = { viewModel.openRebootDialog() },
                 onOpenSettings = { viewModel.openSettingsDialog() }
             )
 
-            // Offline / Reconnecting Warning Banner
             if (uiState.connectionStatus == ConnectionStatus.RECONNECTING ||
                 uiState.connectionStatus == ConnectionStatus.DISCONNECTED
             ) {
@@ -117,74 +128,102 @@ fun MonitorDashboardScreen(
                     }
                 }
             }
+        }
 
-            val rState = uiState.routerState
+        Box(modifier = modifier.fillMaxSize()) {
+            AnimatedContent(
+                targetState = tabIndex,
+                transitionSpec = {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (slideInHorizontally { it / 6 * dir } + fadeIn()) togetherWith
+                        (slideOutHorizontally { -it / 6 * dir } + fadeOut())
+                },
+                label = "dashTab"
+            ) { index ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = innerPadding.calculateTopPadding())
+                        .verticalScroll(scrollStates[index])
+                        .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = barClearance + 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    topSection()
+                    when (DashTab.entries[index]) {
+                        DashTab.Home -> {
+                            MinimalWanSpeedCard(wan = rState?.wan ?: WanMetrics())
 
-            // Minimal WAN Speed Card (Download & Upload)
-            MinimalWanSpeedCard(
-                wan = rState?.wan ?: WanMetrics()
+                            CellularCellLockCard(
+                                cellLock = rState?.cellLock ?: CellLockInfo(),
+                                cellular = rState?.cellular ?: CellularMetrics(),
+                                hardware = rState?.hardware,
+                                onEditLocks = { viewModel.openLockEditor() },
+                                networkBusy = uiState.networkActionBusy,
+                                onMobileData = { viewModel.setMobileData(it) },
+                                onFlightMode = { viewModel.setFlightMode(it) },
+                                onRescan = { viewModel.rescanNetwork() }
+                            )
+                        }
+
+                        DashTab.Network -> {
+                            WifiRadiosCard(
+                                wifiConfig = uiState.wifiRadioConfig,
+                                isLoading = uiState.wifiRadioLoading,
+                                isSaving = uiState.wifiRadioSaving,
+                                message = uiState.wifiRadioMessage,
+                                onReload = { viewModel.loadWifiRadios() },
+                                onToggle24g = { viewModel.setWifi24g(it) },
+                                onToggle5g = { viewModel.setWifi5g(it) }
+                            )
+
+                            LanDnsCard(
+                                modifier = Modifier.onGloballyPositioned { dnsCardY = it.positionInParent().y.toInt() },
+                                dnsConfig = uiState.dnsConfig,
+                                isLoaded = uiState.dnsLoaded,
+                                isLoading = uiState.dnsLoading,
+                                isSaving = uiState.dnsSaving,
+                                message = uiState.dnsMessage,
+                                onReload = { viewModel.loadDns() },
+                                onSaveDns = { p, s -> viewModel.saveDns(p, s) }
+                            )
+                        }
+
+                        DashTab.Tools -> {
+                            NetworkDiagnosisCard(
+                                diagnosisState = uiState.diagnosisState,
+                                onModeChanged = { viewModel.setDiagnosisMode(it) },
+                                onTargetChanged = { viewModel.setDiagnosisTarget(it) },
+                                onPingTimesChanged = { viewModel.setDiagnosisPingTimes(it) },
+                                onStart = { viewModel.startDiagnosis() },
+                                onStop = { viewModel.stopDiagnosis() },
+                                onClear = { viewModel.clearDiagnosisOutput() }
+                            )
+                        }
+
+                        DashTab.Devices -> {
+                            DeviceFleetSection(
+                                devices = uiState.filteredDevices,
+                                totalCount = rState?.devices?.size ?: 0,
+                                filterMode = uiState.filterMode,
+                                sortMode = uiState.sortMode,
+                                searchQuery = uiState.searchQuery,
+                                onFilterChanged = { viewModel.setFilter(it) },
+                                onSortChanged = { viewModel.setSort(it) },
+                                onSearchChanged = { viewModel.setSearchQuery(it) },
+                                onOpenRename = { viewModel.openRenameDialog(it) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            GlassNavBar(
+                selected = tabIndex,
+                onSelect = { tabIndex = it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = navBottom + 12.dp)
             )
-
-            // Minimal Cellular & Cell Lock Telemetry Card
-            CellularCellLockCard(
-                cellLock = rState?.cellLock ?: CellLockInfo(),
-                cellular = rState?.cellular ?: CellularMetrics(),
-                hardware = rState?.hardware,
-                onEditLocks = { viewModel.openLockEditor() },
-                networkBusy = uiState.networkActionBusy,
-                onMobileData = { viewModel.setMobileData(it) },
-                onFlightMode = { viewModel.setFlightMode(it) },
-                onRescan = { viewModel.rescanNetwork() }
-            )
-
-            // Minimal Wi-Fi Radios Card (2.4 GHz & 5 GHz)
-            WifiRadiosCard(
-                wifiConfig = uiState.wifiRadioConfig,
-                isLoading = uiState.wifiRadioLoading,
-                isSaving = uiState.wifiRadioSaving,
-                message = uiState.wifiRadioMessage,
-                onReload = { viewModel.loadWifiRadios() },
-                onToggle24g = { viewModel.setWifi24g(it) },
-                onToggle5g = { viewModel.setWifi5g(it) }
-            )
-
-            // Minimal LAN DNS Card (the header's DNS button scrolls here)
-            LanDnsCard(
-                modifier = Modifier.onGloballyPositioned { dnsCardY = it.positionInParent().y.toInt() },
-                dnsConfig = uiState.dnsConfig,
-                isLoaded = uiState.dnsLoaded,
-                isLoading = uiState.dnsLoading,
-                isSaving = uiState.dnsSaving,
-                message = uiState.dnsMessage,
-                onReload = { viewModel.loadDns() },
-                onSaveDns = { p, s -> viewModel.saveDns(p, s) }
-            )
-
-            // Minimal Network Diagnosis Card (Ping & Traceroute)
-            NetworkDiagnosisCard(
-                diagnosisState = uiState.diagnosisState,
-                onModeChanged = { viewModel.setDiagnosisMode(it) },
-                onTargetChanged = { viewModel.setDiagnosisTarget(it) },
-                onPingTimesChanged = { viewModel.setDiagnosisPingTimes(it) },
-                onStart = { viewModel.startDiagnosis() },
-                onStop = { viewModel.stopDiagnosis() },
-                onClear = { viewModel.clearDiagnosisOutput() }
-            )
-
-            // Minimal Connected Devices Fleet Section
-            DeviceFleetSection(
-                devices = uiState.filteredDevices,
-                totalCount = rState?.devices?.size ?: 0,
-                filterMode = uiState.filterMode,
-                sortMode = uiState.sortMode,
-                searchQuery = uiState.searchQuery,
-                onFilterChanged = { viewModel.setFilter(it) },
-                onSortChanged = { viewModel.setSort(it) },
-                onSearchChanged = { viewModel.setSearchQuery(it) },
-                onOpenRename = { viewModel.openRenameDialog(it) }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 

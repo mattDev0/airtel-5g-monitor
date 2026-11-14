@@ -480,15 +480,20 @@ class ZltRouterClient(
         val cell160 = cachedCell160
         val band161 = cachedBand161
 
+        fun firstPci(vararg candidates: String): String =
+            candidates.map { it.trim() }.firstOrNull { it.isNotEmpty() && it != "-" && it != "null" } ?: "-"
+
         fun tf(key: String, json: JSONObject): Boolean {
             val v = json.optString(key, "")
             return v in listOf("1", "true", "True")
         }
 
         val cellLock = CellLockInfo(
-            servingPci4g = cell160.optString("PCI", "-").ifEmpty { "-" },
+            // cmd 160 leaves PCI empty while carrier aggregation is active; the cmd 1018
+            // stats row still carries the primary cell's PCI, so fall back to it.
+            servingPci4g = firstPci(cell160.optString("PCI"), latestChart.optString("pci")),
             servingFreq4g = cell160.optString("FREQ", "-").ifEmpty { "-" },
-            servingPci5g = cell160.optString("PCI_5G", "-").ifEmpty { "-" },
+            servingPci5g = firstPci(cell160.optString("PCI_5G"), latestChart.optString("nr_pci"), latestChart.optString("pci_5g")),
             servingFreq5g = cell160.optString("FREQ_5G", "-").ifEmpty { "-" },
             currentBands4g = cell160.optString("current_band", "-").ifEmpty { "-" },
             currentBand5g = cell160.optString("current_band_5g", "-").ifEmpty { "-" },

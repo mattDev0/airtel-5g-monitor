@@ -1,57 +1,60 @@
 import SwiftUI
 
-/// Main screen, laid out like the Android app: header card, offline banner, then the
-/// speed, cellular, Wi-Fi, DNS, diagnosis and device cards in the same order.
+/// Main screen: four tabs (Home, Network, Tools, Devices) under a Liquid Glass tab bar, each
+/// with the header bar and offline banner on top. Mirrors the Android app's bottom bar.
 public struct DashboardView: View {
     @StateObject private var viewModel = MonitorViewModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
     @State private var showRebootAlert = false
     @State private var showLocks = false
+    @State private var selection: Tab = .home
+    @State private var pendingDnsScroll = false
+
+    enum Tab: Hashable { case home, network, tools, devices }
 
     public init() {}
 
     public var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 16) {
-                    HeaderBarView(
-                        viewModel: viewModel,
-                        onOpenDns: {
-                            Task { await viewModel.loadDns() }
-                            withAnimation { proxy.scrollTo("dns", anchor: .top) }
-                        },
-                        onOpenSettings: { showSettings = true },
-                        onOpenReboot: { showRebootAlert = true }
-                    )
-
-                    if viewModel.connectionStatus == .reconnecting {
-                        offlineBanner
-                    }
-
-                    HeroMetricsView(wan: viewModel.state.wan)
-                    CellularCardView(
-                        cellular: viewModel.state.cellular,
-                        cellLock: viewModel.state.cellLock,
-                        hardware: viewModel.state.hardware,
-                        onEditLocks: { showLocks = true },
-                        networkBusy: viewModel.isNetworkBusy,
-                        onMobileData: { on in Task { await viewModel.setMobileData(on) } },
-                        onFlightMode: { on in Task { await viewModel.setFlightMode(on) } },
-                        onRescan: { Task { await viewModel.rescanNetwork() } }
-                    )
-                    WifiRadiosCardView(viewModel: viewModel)
-                    LanDnsCardView(viewModel: viewModel).id("dns")
-                    DiagnosisCardView(viewModel: viewModel)
-                    DeviceFleetView(viewModel: viewModel)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .padding(.bottom, 24)
+        // On iOS 26 the system draws this as the floating Liquid Glass tab bar: the selection
+        // is a glass lens that morphs between tabs, and the bar shrinks as you scroll.
+        TabView(selection: $selection) {
+            tabPage {
+                HeroMetricsView(wan: viewModel.state.wan)
+                CellularCardView(
+                    cellular: viewModel.state.cellular,
+                    cellLock: viewModel.state.cellLock,
+                    hardware: viewModel.state.hardware,
+                    onEditLocks: { showLocks = true },
+                    networkBusy: viewModel.isNetworkBusy,
+                    onMobileData: { on in Task { await viewModel.setMobileData(on) } },
+                    onFlightMode: { on in Task { await viewModel.setFlightMode(on) } },
+                    onRescan: { Task { await viewModel.rescanNetwork() } }
+                )
             }
-            .background { LiquidGlassBackground() }
-            .refreshable { await viewModel.reloadAll() }
+            .tabItem { Label("Home", systemImage: "house.fill") }
+            .tag(Tab.home)
+
+            tabPage(scrollsToDns: true) {
+                WifiRadiosCardView(viewModel: viewModel)
+                LanDnsCardView(viewModel: viewModel).id("dns")
+            }
+            .tabItem { Label("Network", systemImage: "wifi") }
+            .tag(Tab.network)
+
+            tabPage {
+                DiagnosisCardView(viewModel: viewModel)
+            }
+            .tabItem { Label("Tools", systemImage: "network") }
+            .tag(Tab.tools)
+
+            tabPage {
+                DeviceFleetView(viewModel: viewModel)
+            }
+            .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }
+            .tag(Tab.devices)
         }
+        .modifier(MinimizingTabBar())
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 Text(toast)
@@ -61,7 +64,7 @@ public struct DashboardView: View {
                     .padding(.vertical, 12)
                     .liquidGlassPanel(cornerRadius: 14)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 64)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .onTapGesture { viewModel.toast = nil }
             }
@@ -100,6 +103,52 @@ public struct DashboardView: View {
         }
     }
 
+    /// One scrollable tab: the header and offline banner, then the tab's own cards.
+    private func tabPage<Content: View>(
+        scrollsToDns: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let inner = content()
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 16) {
+                    HeaderBarView(
+                        viewModel: viewModel,
+                        onOpenDns: {
+                            Task { await viewModel.loadDns() }
+                            if scrollsToDns {
+                                withAnimation { proxy.scrollTo("dns", anchor: .top) }
+                            } else {
+                                pendingDnsScroll = true
+                                selection = .network
+                            }
+                        },
+                        onOpenSettings: { showSettings = true },
+                        onOpenReboot: { showRebootAlert = true }
+                    )
+
+                    if viewModel.connectionStatus == .reconnecting {
+                        offlineBanner
+                    }
+
+                    inner
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .padding(.bottom, 24)
+            }
+            .background { LiquidGlassBackground() }
+            .refreshable { await viewModel.reloadAll() }
+            .onAppear {
+                guard scrollsToDns, pendingDnsScroll else { return }
+                pendingDnsScroll = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation { proxy.scrollTo("dns", anchor: .top) }
+                }
+            }
+        }
+    }
+
     private var offlineBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "wifi.slash")
@@ -115,5 +164,17 @@ public struct DashboardView: View {
         }
         .liquidGlassPanel(cornerRadius: 16, padding: 14)
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(StatusColors.error.opacity(0.4), lineWidth: 1))
+    }
+}
+
+/// Collapses the iOS 26 tab bar while scrolling down; a no-op on earlier versions.
+private struct MinimizingTabBar: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
+        }
     }
 }

@@ -464,15 +464,26 @@ public actor ZltRouterClient {
         let cell160 = cachedCell160
         let band161 = cachedBand161
 
+        func firstPci(_ candidates: Any?...) -> String {
+            for c in candidates {
+                guard let c else { continue }
+                let v = "\(c)".trimmingCharacters(in: .whitespaces)
+                if !v.isEmpty && v != "-" && v != "null" && v != "<null>" { return v }
+            }
+            return "-"
+        }
+
         func tf(_ key: String, in dict: [String: Any]) -> Bool {
             let v = "\(dict[key] ?? "")"
             return v == "1" || v.lowercased() == "true"
         }
 
         let cellLock = CellLockInfo(
-            servingPci4g: cell160["PCI"] as? String ?? "-",
+            // cmd 160 leaves PCI empty while carrier aggregation is active; the cmd 1018
+            // stats row still carries the primary cell's PCI, so fall back to it.
+            servingPci4g: firstPci(cell160["PCI"], latestChart["pci"]),
             servingFreq4g: cell160["FREQ"] as? String ?? "-",
-            servingPci5g: cell160["PCI_5G"] as? String ?? "-",
+            servingPci5g: firstPci(cell160["PCI_5G"], latestChart["nr_pci"], latestChart["pci_5g"]),
             servingFreq5g: cell160["FREQ_5G"] as? String ?? "-",
             currentBands4g: cell160["current_band"] as? String ?? "-",
             currentBand5g: cell160["current_band_5g"] as? String ?? "-",

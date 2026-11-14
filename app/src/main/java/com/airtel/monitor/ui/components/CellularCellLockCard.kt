@@ -125,17 +125,20 @@ fun CellularCellLockCard(
                     else -> "-"
                 }
 
-                val pciText = when {
-                    cellLock.servingPci5g.isNotBlank() && cellLock.servingPci5g != "-" -> {
-                        val clean = cellLock.servingPci5g.removePrefix("PCI").removePrefix("pci").trim()
-                        "PCI $clean"
-                    }
-                    cellLock.servingPci4g.isNotBlank() && cellLock.servingPci4g != "-" -> {
-                        val clean = cellLock.servingPci4g.removePrefix("PCI").removePrefix("pci").trim()
-                        "PCI $clean"
-                    }
-                    else -> "-"
+                // With carrier aggregation the router may report several cells
+                // ("393+120", "393,120"); show the primary one and a "+N" count.
+                fun formatPci(raw: String): String? {
+                    val ids = raw.removePrefix("PCI").removePrefix("pci")
+                        .split('+', ',', ';', '/', ' ')
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() && it != "-" && it != "null" }
+                    if (ids.isEmpty()) return null
+                    return if (ids.size == 1) "PCI ${ids[0]}" else "${ids[0]} +${ids.size - 1}"
                 }
+
+                val pciText = formatPci(cellLock.servingPci5g)
+                    ?: formatPci(cellLock.servingPci4g)
+                    ?: "-"
 
                 TelemetryPill(label = "Band", value = bandText, modifier = Modifier.weight(1f))
                 TelemetryPill(label = "Cell", value = pciText, modifier = Modifier.weight(1f))
@@ -367,7 +370,9 @@ private fun TelemetryPill(
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+                maxLines = 1,
+                softWrap = false,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }

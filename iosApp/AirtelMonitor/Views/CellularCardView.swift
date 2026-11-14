@@ -66,16 +66,19 @@ public struct CellularCardView: View {
         return "-"
     }
 
+    /// With carrier aggregation the router may report several cells ("393+120",
+    /// "393,120"); show the primary one and a "+N" count.
+    private func formatPci(_ raw: String) -> String? {
+        let ids = raw.replacingOccurrences(of: "^(?i)pci\\s*", with: "", options: .regularExpression)
+            .components(separatedBy: CharacterSet(charactersIn: "+,;/ "))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0 != "-" && $0 != "null" }
+        guard let first = ids.first else { return nil }
+        return ids.count == 1 ? "PCI \(first)" : "\(first) +\(ids.count - 1)"
+    }
+
     private var cellPillValue: String {
-        if let p5 = value(cellLock.servingPci5g) {
-            let clean = p5.replacingOccurrences(of: "^(?i)pci\\s*", with: "", options: .regularExpression)
-            return "PCI \(clean)"
-        }
-        if let p4 = value(cellLock.servingPci4g) {
-            let clean = p4.replacingOccurrences(of: "^(?i)pci\\s*", with: "", options: .regularExpression)
-            return "PCI \(clean)"
-        }
-        return "-"
+        formatPci(cellLock.servingPci5g) ?? formatPci(cellLock.servingPci4g) ?? "-"
     }
 
     public var body: some View {
