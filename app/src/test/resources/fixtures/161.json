@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "cmd": 161,
+  "all_band_4g": "120080800C5",
+  "band_4g_switch": "1",
+  "band_4g_mask": "45",
+  "all_band_5g": "20000000010000000000",
+  "band_5g_switch": "0",
+  "band_5g_mask": "20000000010000000000"
+}

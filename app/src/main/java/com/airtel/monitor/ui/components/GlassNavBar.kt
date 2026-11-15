@@ -6,14 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Devices
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.NetworkCheck
-import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,24 +20,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airtel.monitor.ui.navigation.TopLevelDestination
 import kotlin.math.abs
 import kotlin.math.min
-
-/** The four sections of the dashboard, in bar order. */
-enum class DashTab(val label: String, val icon: ImageVector) {
-    Home("Home", Icons.Rounded.Home),
-    Network("Network", Icons.Rounded.Wifi),
-    Tools("Tools", Icons.Rounded.NetworkCheck),
-    Devices("Devices", Icons.Rounded.Devices)
-}
 
 /** Height of the floating bar, used by screens to leave room under their content. */
 val GlassNavBarHeight = 72.dp
@@ -58,15 +46,16 @@ val GlassNavBarHeight = 72.dp
  */
 @Composable
 fun GlassNavBar(
-    selected: Int,
-    onSelect: (Int) -> Unit,
+    selectedRoute: Any,
+    onSelect: (TopLevelDestination) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val tabs = DashTab.entries
+    val tabs = TopLevelDestination.entries
+    val selected = tabs.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
     val shape = RoundedCornerShape(36.dp)
-    val dark = isSystemInDarkTheme()
-    val haptics = LocalHapticFeedback.current
     val scheme = MaterialTheme.colorScheme
+    val dark = scheme.surface.luminance() < 0.5f
+    val haptics = LocalHapticFeedback.current
 
     val position = remember { Animatable(selected.toFloat()) }
     LaunchedEffect(selected) {
@@ -76,9 +65,9 @@ fun GlassNavBar(
     val currentSelected by rememberUpdatedState(selected)
     val currentOnSelect by rememberUpdatedState(onSelect)
     fun choose(index: Int) {
-        if (index != currentSelected) {
+        if (index != currentSelected && index in tabs.indices) {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            currentOnSelect(index)
+            currentOnSelect(tabs[index])
         }
     }
 
@@ -159,6 +148,7 @@ fun GlassNavBar(
             tabs.forEachIndexed { i, tab ->
                 // 1 when the lens is over this tab, fading to 0 one tab away.
                 val near = (1f - abs(position.value - i)).coerceIn(0f, 1f)
+                val label = stringResource(tab.labelRes)
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -167,14 +157,14 @@ fun GlassNavBar(
                             interactionSource = null,
                             indication = null,
                             role = Role.Tab,
-                            onClickLabel = tab.label
+                            onClickLabel = label
                         ) { choose(i) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = tab.icon,
-                        contentDescription = tab.label,
+                        contentDescription = label,
                         tint = lerp(scheme.onSurfaceVariant, scheme.primary, near),
                         modifier = Modifier
                             .size(24.dp)
@@ -186,7 +176,7 @@ fun GlassNavBar(
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
-                        text = tab.label,
+                        text = label,
                         fontSize = 11.sp,
                         fontWeight = if (near > 0.5f) FontWeight.SemiBold else FontWeight.Medium,
                         color = lerp(scheme.onSurfaceVariant, scheme.primary, near)

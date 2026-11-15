@@ -1,3 +1,70 @@
 <resources>
     <string name="app_name">Airtel Odu</string>
+    <string name="brand_title">Airtel 5G</string>
+
+    <!-- Navigation destinations -->
+    <string name="nav_home">Home</string>
+    <string name="nav_signal">Signal</string>
+    <string name="nav_devices">Devices</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Top bar & status -->
+    <string name="status_live">Live</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_connecting">Connecting</string>
+    <string name="status_reconnecting">Reconnecting</string>
+    <string name="status_offline">Offline</string>
+    <string name="cd_pause_polling">Pause</string>
+    <string name="cd_resume_polling">Resume</string>
+    <string name="cd_more_options">More options</string>
+    <string name="cd_unread_sms">Unread messages</string>
+    <string name="menu_refresh_now">Refresh now</string>
+    <string name="menu_update_every">Update every</string>
+    <string name="menu_reboot_router">Reboot router</string>
+
+    <!-- Common actions & states -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_continue">Continue</string>
+    <string name="confirm_type_prompt">Type \"%1$s\" to confirm</string>
+    <string name="error_generic_title">Unable to reach router</string>
+    <string name="offline_banner_title">Cannot reach router at %1$s</string>
+    <string name="offline_banner_subtitle">Ensure your phone is connected to the router\'s Wi-Fi network.</string>
+    <string name="auth_error_title">Router authentication failed</string>
+    <string name="auth_error_subtitle">Check the router username and password in Settings.</string>
+
+    <!-- Signal & carriers -->
+    <string name="signal_quality_excellent">Excellent</string>
+    <string name="signal_quality_good">Good</string>
+    <string name="signal_quality_fair">Fair</string>
+    <string name="signal_quality_poor">Poor</string>
+    <string name="signal_quality_unknown">--</string>
+    <string name="cd_signal_bars">Signal strength %1$d of %2$d bars</string>
+    <string name="carrier_role_pcc">PCC</string>
+    <string name="carrier_role_pscell">PSCell</string>
+    <string name="carrier_role_scc">SCC</string>
+    <string name="carrier_earfcn_fmt">EARFCN %1$s</string>
+    <string name="carrier_arfcn_fmt">ARFCN %1$s</string>
+    <string name="carrier_pci_fmt">PCI %1$s</string>
+    <string name="carrier_bw_fmt">%1$d MHz</string>
+
+    <!-- Settings hub (Phase 0) -->
+    <string name="settings_connection_title">Router Connection &amp; App</string>
+    <string name="settings_connection_subtitle">Gateway %1$s · User %2$s</string>
+    <string name="settings_edit_connection">Edit router credentials &amp; poll rate</string>
+    <string name="settings_theme_label">Appearance</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+
+    <!-- Signal tab (Phase 0 preview) -->
+    <string name="signal_carriers_title">Serving Carriers</string>
+    <string name="signal_carriers_empty">Waiting for serving cell details from router</string>
+    <string name="signal_manage_locks">Manage Band &amp; Cell Lock</string>
+
+    <!-- Reboot confirmation -->
+    <string name="reboot_confirm_title">Reboot Router?</string>
+    <string name="reboot_confirm_impact">This restarts the ZLT X17M 5G router. Internet connectivity will drop for 1–2 minutes.</string>
+    <string name="reboot_confirm_button">Reboot</string>
 </resources>

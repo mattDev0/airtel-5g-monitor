@@ -1,21 +1,23 @@
 package com.airtel.monitor
 
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
-import com.airtel.monitor.ui.screens.MonitorDashboardScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.airtel.monitor.ui.navigation.AppShell
+import com.airtel.monitor.ui.navigation.ShellViewModel
 import com.airtel.monitor.ui.theme.AirtelMonitorTheme
-import com.airtel.monitor.ui.viewmodel.MonitorViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: MonitorViewModel by viewModels()
+    private val appContainer by lazy { (application as AirtelMonitorApplication).container }
+    private val shellViewModel: ShellViewModel by viewModels { ShellViewModel.factory(appContainer) }
 
     // Android 16+/17 gate LAN access (192.168.1.1) behind this runtime permission.
     private val localNetPermission = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -24,7 +26,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.forceRefresh()
+            shellViewModel.forceRefresh()
         }
     }
 
@@ -36,27 +38,19 @@ class MainActivity : ComponentActivity() {
         if (ContextCompat.checkSelfPermission(this, localNetPermission) != PackageManager.PERMISSION_GRANTED) {
             try {
                 permissionLauncher.launch(localNetPermission)
-            } catch (e: Exception) {
-                // If the permission is not defined on earlier Android versions, ignore
+            } catch (_: Exception) {
+                // Permission is not defined on earlier Android versions
             }
         }
 
         setContent {
-            AirtelMonitorTheme {
-                MonitorDashboardScreen(viewModel = viewModel)
+            val shellState by shellViewModel.uiState.collectAsStateWithLifecycle()
+            AirtelMonitorTheme(themePreference = shellState.themePreference) {
+                AppShell(
+                    container = appContainer,
+                    shellViewModel = shellViewModel
+                )
             }
         }
-    }
-
-    override fun onStart() {
-        super.onStart()
-        // Resume polling when the screen becomes visible and active
-        viewModel.startPolling()
-    }
-
-    override fun onStop() {
-        // Stop polling completely when the screen is off or app is in the background
-        viewModel.stopPolling()
-        super.onStop()
     }
 }

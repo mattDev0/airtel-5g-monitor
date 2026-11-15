@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "cmd": 223,
+  "dhcp_list_info": [
+    {
+      "mac": "02:11:22:33:44:01",
+      "ip": "192.168.1.192",
+      "hostname": "pixel-6",
+      "interface": "wlan",
+      "expires": "82340",
+      "ipv6": ""
+    },
+    {
+      "mac": "02:11:22:33:44:02",
+      "ip": "192.168.1.50",
+      "hostname": "NULL",
+      "interface": "lan",
+      "expires": "86100",
+      "ipv6": ""
+    }
+  ]
+}

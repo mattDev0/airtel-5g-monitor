@@ -1,0 +1,34 @@
+{
+  "success": true,
+  "cmd": 1018,
+  "device_info": [
+    {
+      "time": "14:20:00",
+      "rsrp_4g": "-85",
+      "sinr_4g": "14",
+      "rsrp_5g": "",
+      "sinr_5g": "",
+      "lte_cqi": "11",
+      "nr_cqi": "",
+      "nr_qam_dl": "",
+      "pci": "393",
+      "cpu_usage": 6.5,
+      "temperature": "53",
+      "memory": "42"
+    },
+    {
+      "time": "14:25:00",
+      "rsrp_4g": "-84",
+      "sinr_4g": "16",
+      "rsrp_5g": "",
+      "sinr_5g": "",
+      "lte_cqi": "12",
+      "nr_cqi": "",
+      "nr_qam_dl": "",
+      "pci": "393",
+      "cpu_usage": 7.0,
+      "temperature": "54",
+      "memory": "43"
+    }
+  ]
+}

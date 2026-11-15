@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "cmd": 160,
+  "PCI": "393+393",
+  "FREQ": "3400+225",
+  "current_band": "7+1",
+  "lte_lock_sw": "1",
+  "lte_lock_freq": "3400,225",
+  "lte_lock_pci": "393,393",
+  "lock_4g_flag": "1",
+  "nr_lock_sw": "0",
+  "nr_lock_freq": "",
+  "nr_lock_pci": "",
+  "nr_lock_cell_band": "",
+  "lock_5g_flag": "0",
+  "PCI_5G": "",
+  "FREQ_5G": "",
+  "current_band_5g": ""
+}

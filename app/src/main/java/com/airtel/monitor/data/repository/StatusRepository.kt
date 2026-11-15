@@ -1,0 +1,316 @@
+package com.airtel.monitor.data.repository
+
+import com.airtel.monitor.core.network.AliasLookup
+import com.airtel.monitor.core.network.RouterResult
+import com.airtel.monitor.core.network.RouterSession
+import com.airtel.monitor.core.util.NetworkFormatters.roundTo2
+import com.airtel.monitor.data.dto.parseCarriers
+import com.airtel.monitor.data.dto.parseCellularMetrics
+import com.airtel.monitor.data.dto.parseDevices
+import com.airtel.monitor.data.dto.parseHardwareMetrics
+import com.airtel.monitor.data.dto.parseLatestChartRow
+import com.airtel.monitor.data.dto.parseNetworkMode218
+import com.airtel.monitor.data.dto.parseSmsUnreadCount
+import com.airtel.monitor.data.dto.parseWanBytes
+import com.airtel.monitor.data.model.BandwidthPoint
+import com.airtel.monitor.data.model.CellLockInfo
+import com.airtel.monitor.data.model.ConnectionStatus
+import com.airtel.monitor.data.model.RouterState
+import com.airtel.monitor.data.model.WanMetrics
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Collections
+import java.util.Date
+import java.util.Locale
+
+class StatusRepository(
+    private val session: RouterSession,
+    private val aliasLookup: AliasLookup,
+    private val clock: () -> Long = System::currentTimeMillis
+) {
+    private val _routerState = MutableStateFlow<RouterState?>(null)
+    val routerState: StateFlow<RouterState?> = _routerState.asStateFlow()
+
+    private val _connectionStatus = MutableStateFlow(ConnectionStatus.CONNECTING)
+    val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus.asStateFlow()
+
+    private val _smsUnreadCount = MutableStateFlow(0)
+    val smsUnreadCount: StateFlow<Int> = _smsUnreadCount.asStateFlow()
+
+    private val _lastError = MutableStateFlow<RouterResult<Nothing>?>(null)
+    val lastError: StateFlow<RouterResult<Nothing>?> = _lastError.asStateFlow()
+
+    private val _lastNet205 = MutableStateFlow<JSONObject?>(null)
+    val lastNet205: StateFlow<JSONObject?> = _lastNet205.asStateFlow()
+
+    private val _history1018 = MutableStateFlow<List<JSONObject>>(emptyList())
+    val history1018: StateFlow<List<JSONObject>> = _history1018.asStateFlow()
+
+    private var prevWanRxBytes: Long? = null
+    private var prevWanTxBytes: Long? = null
+    private var prevWanTimeMs: Long = 0
+
+    private val history = Collections.synchronizedList(mutableListOf<BandwidthPoint>())
+    private val maxHistory = 60
+
+    private var lastSlowPollTimeMs: Long = 0
+    private val slowIntervalMs = 20_000L
+    private var cachedLatestChart: JSONObject = JSONObject()
+    private var cachedCell160: JSONObject = JSONObject()
+    private var cachedBand161: JSONObject = JSONObject()
+    private var cachedNetMode218: JSONObject = JSONObject()
+
+    var peakDlMbps: Double = 0.0
+        private set
+    var peakUlMbps: Double = 0.0
+        private set
+
+    fun resetState() {
+        session.resetSession()
+        prevWanRxBytes = null
+        prevWanTxBytes = null
+        prevWanTimeMs = 0
+        lastSlowPollTimeMs = 0
+        cachedLatestChart = JSONObject()
+        cachedCell160 = JSONObject()
+        cachedBand161 = JSONObject()
+        cachedNetMode218 = JSONObject()
+        history.clear()
+        peakDlMbps = 0.0
+        peakUlMbps = 0.0
+        _connectionStatus.value = ConnectionStatus.CONNECTING
+        _lastError.value = null
+    }
+
+    fun updateCachedNetMode218(json: JSONObject) {
+        if (json.has("flightMode")) {
+            cachedNetMode218 = json
+        }
+    }
+
+    fun markDisconnected() {
+        _connectionStatus.value = ConnectionStatus.DISCONNECTED
+    }
+
+    fun pollFast(forceSlow: Boolean = false): RouterResult<RouterState> {
+        val nowMs = clock()
+
+        val dashRes = session.execute(401)
+        if (dashRes is RouterResult.NotLoggedIn) {
+            _connectionStatus.value = ConnectionStatus.DISCONNECTED
+            _lastError.value = dashRes
+            return dashRes
+        }
+
+        val sysRes = session.execute(113)
+        if (sysRes is RouterResult.NotLoggedIn) {
+            _connectionStatus.value = ConnectionStatus.DISCONNECTED
+            _lastError.value = sysRes
+            return sysRes
+        }
+
+        val dash = dashRes.getOrNull() ?: JSONObject()
+        val sysStatus = sysRes.getOrNull() ?: JSONObject()
+
+        val hasValidResponse = (dash.length() > 0 && !dash.has("error")) ||
+            (sysStatus.length() > 0 && !sysStatus.has("error"))
+        if (!hasValidResponse) {
+            val failure = when {
+                dashRes is RouterResult.Unreachable -> dashRes
+                sysRes is RouterResult.Unreachable -> sysRes
+                dashRes is RouterResult.BadResponse -> dashRes
+                sysRes is RouterResult.BadResponse -> sysRes
+                else -> RouterResult.Unreachable("Router returned empty or invalid status")
+            }
+            _connectionStatus.value = ConnectionStatus.RECONNECTING
+            _lastError.value = failure
+            return failure
+        }
+
+        val net205 = session.execute(205).getOrNull() ?: JSONObject()
+        if (net205.length() > 0) {
+            _lastNet205.value = net205
+        }
+        val dhcp = session.execute(223).getOrNull() ?: JSONObject()
+        val wifi5g = session.execute(225).getOrNull() ?: JSONObject()
+        val wifi24g = session.execute(224).getOrNull() ?: JSONObject()
+
+        refreshSlowData(nowMs, force = forceSlow || lastSlowPollTimeMs == 0L)
+        val latestChart = cachedLatestChart
+
+        val (rxKbps, txKbps) = computeWanSpeed(nowMs)
+        val dlMbps = roundTo2((rxKbps * 8.0) / 1024.0)
+        val ulMbps = roundTo2((txKbps * 8.0) / 1024.0)
+        if (dlMbps > peakDlMbps) peakDlMbps = dlMbps
+        if (ulMbps > peakUlMbps) peakUlMbps = ulMbps
+
+        val devices = parseDevices(dhcp, dash, wifi5g, wifi24g, aliasLookup)
+        val cellular = parseCellularMetrics(sysStatus, dash, net205, latestChart)
+
+        val carriersFrom205 = parseCarriers(net205)
+        val carriersFrom160 = parseCarriers(cachedCell160)
+        val carriersFromDash = parseCarriers(dash)
+        val carriers = when {
+            carriersFrom205.isNotEmpty() -> carriersFrom205
+            carriersFrom160.isNotEmpty() -> carriersFrom160
+            else -> carriersFromDash
+        }
+
+        val cell160 = cachedCell160
+        val band161 = cachedBand161
+        val mode218 = parseNetworkMode218(cachedNetMode218)
+
+        fun firstPci(vararg candidates: String): String =
+            candidates.map { it.trim() }.firstOrNull { it.isNotEmpty() && it != "-" && it != "null" } ?: "-"
+
+        fun tf(key: String, json: JSONObject): Boolean =
+            json.optString(key, "") in listOf("1", "true", "True")
+
+        val cellLock = CellLockInfo(
+            servingPci4g = firstPci(net205.optString("PCI"), cell160.optString("PCI"), latestChart.optString("pci")),
+            servingFreq4g = firstPci(net205.optString("FREQ"), cell160.optString("FREQ")),
+            servingPci5g = firstPci(net205.optString("PCI_5G"), cell160.optString("PCI_5G"), latestChart.optString("nr_pci"), latestChart.optString("pci_5g")),
+            servingFreq5g = firstPci(net205.optString("FREQ_5G"), cell160.optString("FREQ_5G")),
+            currentBands4g = firstPci(net205.optString("currentband"), cell160.optString("current_band")),
+            currentBand5g = firstPci(net205.optString("currentband_5g"), cell160.optString("current_band_5g")),
+            lteLockEnabled = tf("lte_lock_sw", cell160),
+            lteLockPci = cell160.optString("lte_lock_pci", "-").ifEmpty { "-" },
+            lteLockFreq = cell160.optString("lte_lock_freq", "-").ifEmpty { "-" },
+            nrLockEnabled = tf("nr_lock_sw", cell160),
+            nrLockPci = cell160.optString("nr_lock_pci", "-").ifEmpty { "-" },
+            nrLockFreq = cell160.optString("nr_lock_freq", "-").ifEmpty { "-" },
+            bandLock4gEnabled = tf("band_4g_switch", band161),
+            bandLock5gEnabled = tf("band_5g_switch", band161),
+            mobileDataOn = mode218.mobileDataOn,
+            flightModeOn = mode218.flightModeOn
+        )
+
+        val hardware = parseHardwareMetrics(latestChart)
+
+        val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nowMs))
+        history.add(
+            BandwidthPoint(
+                timeFormatted = timeFmt,
+                downloadMbps = dlMbps,
+                uploadMbps = ulMbps,
+                rxKbps = rxKbps,
+                txKbps = txKbps
+            )
+        )
+        while (history.size > maxHistory) {
+            history.removeAt(0)
+        }
+
+        val wan = WanMetrics(
+            downloadKbps = rxKbps,
+            uploadKbps = txKbps,
+            downloadMbps = dlMbps,
+            uploadMbps = ulMbps,
+            dlFlowMb = net205.optString("flow_dl").ifEmpty { dash.optString("flow_dl", "-") },
+            ulFlowMb = net205.optString("flow_ul").ifEmpty { dash.optString("flow_ul", "-") },
+            totalFlowMb = net205.optString("mon_total_flow").ifEmpty { dash.optString("mon_total_flow", "-") },
+            peakDlMbps = peakDlMbps,
+            peakUlMbps = peakUlMbps
+        )
+
+        val state = RouterState(
+            timestamp = nowMs,
+            timeFormatted = timeFmt,
+            wan = wan,
+            cellular = cellular,
+            carriers = carriers,
+            cellLock = cellLock,
+            hardware = hardware,
+            devices = devices,
+            history = history.toList()
+        )
+        _routerState.value = state
+        _connectionStatus.value = ConnectionStatus.CONNECTED
+        _lastError.value = null
+        return RouterResult.Ok(state)
+    }
+
+    /** Alignment mode polls ONLY cmd 205 at 1s interval. */
+    fun pollAlignment(): RouterResult<JSONObject> {
+        val res = session.execute(205)
+        if (res is RouterResult.Ok) {
+            _lastNet205.value = res.data
+            _connectionStatus.value = ConnectionStatus.CONNECTED
+            _lastError.value = null
+        } else if (res is RouterResult.NotLoggedIn) {
+            _connectionStatus.value = ConnectionStatus.DISCONNECTED
+            _lastError.value = res
+        } else if (res is RouterResult.Unreachable) {
+            _connectionStatus.value = ConnectionStatus.RECONNECTING
+            _lastError.value = res
+        }
+        return res
+    }
+
+    private fun computeWanSpeed(nowMs: Long): Pair<Double, Double> {
+        val countersJson = session.execute(18).getOrNull() ?: return Pair(0.0, 0.0)
+        val counters = parseWanBytes(countersJson) ?: return Pair(0.0, 0.0)
+
+        val prevRx = prevWanRxBytes
+        val prevTx = prevWanTxBytes
+        val prevTime = prevWanTimeMs
+
+        prevWanRxBytes = counters.rxBytes
+        prevWanTxBytes = counters.txBytes
+        prevWanTimeMs = nowMs
+
+        if (prevRx == null || prevTx == null || prevTime <= 0) return Pair(0.0, 0.0)
+
+        val dt = (nowMs - prevTime) / 1000.0
+        if (dt <= 0.05) return Pair(0.0, 0.0)
+
+        val dRx = counters.rxBytes - prevRx
+        val dTx = counters.txBytes - prevTx
+        if (dRx < 0 || dTx < 0) return Pair(0.0, 0.0)
+
+        val rxKbps = (dRx / dt) / 1024.0
+        val txKbps = (dTx / dt) / 1024.0
+        return Pair(roundTo2(rxKbps), roundTo2(txKbps))
+    }
+
+    private fun refreshSlowData(nowMs: Long, force: Boolean) {
+        if (!force && (nowMs - lastSlowPollTimeMs) < slowIntervalMs) return
+        lastSlowPollTimeMs = nowMs
+
+        session.execute(1018).getOrNull()?.let { statusChart ->
+            val row = parseLatestChartRow(statusChart)
+            if (row.length() > 0) cachedLatestChart = row
+            val arr = statusChart.optJSONArray("device_info")
+            if (arr != null && arr.length() > 0) {
+                val list = ArrayList<JSONObject>(arr.length())
+                for (i in 0 until arr.length()) {
+                    arr.optJSONObject(i)?.let { list.add(it) }
+                }
+                _history1018.value = list
+            }
+        }
+
+        session.execute(160).getOrNull()?.let { cell ->
+            if (cell.optBoolean("success", true) && cell.length() > 1) {
+                cachedCell160 = cell
+            }
+        }
+
+        session.execute(161).getOrNull()?.let { band ->
+            if (band.optBoolean("success", true) && band.length() > 1) {
+                cachedBand161 = band
+            }
+        }
+
+        session.execute(218).getOrNull()?.let { mode ->
+            updateCachedNetMode218(mode)
+        }
+
+        session.execute(394).getOrNull()?.let { bar ->
+            _smsUnreadCount.value = parseSmsUnreadCount(bar)
+        }
+    }
+}

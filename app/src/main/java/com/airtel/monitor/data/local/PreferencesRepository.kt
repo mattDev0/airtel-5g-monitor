@@ -1,38 +1,68 @@
 ﻿package com.airtel.monitor.data.local
 
 import android.content.Context
-import android.content.SharedPreferences
-import com.airtel.monitor.data.remote.RouterSettings
+import com.airtel.monitor.core.datastore.AppPreferencesRepository
+import com.airtel.monitor.core.datastore.AppPreferencesSnapshot
+import com.airtel.monitor.core.datastore.CredentialMigration
+import com.airtel.monitor.core.datastore.SpeedUnitPreference
+import com.airtel.monitor.core.datastore.ThemePreference
+import com.airtel.monitor.core.network.RouterSettings
+import kotlinx.coroutines.flow.StateFlow
 
-class PreferencesRepository(context: Context) : RouterSettings {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("airtel_monitor_prefs", Context.MODE_PRIVATE)
+/**
+ * Compatibility facade over [AppPreferencesRepository] (encrypted DataStore + Keystore AES-GCM).
+ */
+class PreferencesRepository private constructor(
+    private val store: AppPreferencesRepository
+) : RouterSettings {
 
-    companion object {
-        private const val KEY_ROUTER_HOST = "router_host"
-        private const val KEY_USERNAME = "router_username"
-        private const val KEY_PASSWORD = "router_password"
-        private const val KEY_POLL_INTERVAL = "poll_interval_seconds"
+    constructor(context: Context) : this(AppPreferencesRepository(context))
 
-        const val DEFAULT_HOST = "192.168.1.1"
-        const val DEFAULT_USERNAME = "root"
-        const val DEFAULT_PASSWORD = "admin"
-        const val DEFAULT_POLL_INTERVAL = 2.0f
-    }
+    val preferencesFlow: StateFlow<AppPreferencesSnapshot>
+        get() = store.preferencesFlow
 
     override var routerHost: String
-        get() = prefs.getString(KEY_ROUTER_HOST, DEFAULT_HOST) ?: DEFAULT_HOST
-        set(value) = prefs.edit().putString(KEY_ROUTER_HOST, value.trim()).apply()
+        get() = store.routerHost
+        set(value) { store.routerHost = value }
 
     override var username: String
-        get() = prefs.getString(KEY_USERNAME, DEFAULT_USERNAME) ?: DEFAULT_USERNAME
-        set(value) = prefs.edit().putString(KEY_USERNAME, value.trim()).apply()
+        get() = store.username
+        set(value) { store.username = value }
 
     override var password: String
-        get() = prefs.getString(KEY_PASSWORD, DEFAULT_PASSWORD) ?: DEFAULT_PASSWORD
-        set(value) = prefs.edit().putString(KEY_PASSWORD, value).apply()
+        get() = store.password
+        set(value) { store.password = value }
 
     var pollIntervalSeconds: Float
-        get() = prefs.getFloat(KEY_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
-        set(value) = prefs.edit().putFloat(KEY_POLL_INTERVAL, value.coerceIn(0.5f, 10.0f)).apply()
+        get() = store.pollIntervalSeconds
+        set(value) { store.pollIntervalSeconds = value }
+
+    suspend fun ensureInitialized() = store.ensureInitialized()
+
+    fun updateSettings(
+        host: String? = null,
+        user: String? = null,
+        pass: String? = null,
+        interval: Float? = null,
+        themeMode: ThemePreference? = null,
+        speedUnit: SpeedUnitPreference? = null,
+        maskSensitive: Boolean? = null,
+        onboardingCompleted: Boolean? = null
+    ) = store.updateSettings(
+        host = host,
+        user = user,
+        pass = pass,
+        interval = interval,
+        themeMode = themeMode,
+        speedUnit = speedUnit,
+        maskSensitive = maskSensitive,
+        onboardingCompleted = onboardingCompleted
+    )
+
+    companion object {
+        const val DEFAULT_HOST = CredentialMigration.DEFAULT_HOST
+        const val DEFAULT_USERNAME = CredentialMigration.DEFAULT_USERNAME
+        const val DEFAULT_PASSWORD = CredentialMigration.DEFAULT_PASSWORD
+        const val DEFAULT_POLL_INTERVAL = CredentialMigration.DEFAULT_POLL_INTERVAL
+    }
 }

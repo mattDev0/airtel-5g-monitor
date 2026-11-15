@@ -6,28 +6,36 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airtel.monitor.R
+import com.airtel.monitor.core.util.NetworkFormatters
 import com.airtel.monitor.data.model.ConnectionStatus
-import com.airtel.monitor.ui.theme.*
+import com.airtel.monitor.ui.theme.AirtelTheme
 
 /**
  * Slim app bar shown at the top of every tab.
  *
- * Title + live status on the left; on the right only a pause/resume toggle and an
- * overflow menu. Refresh, poll interval, DNS, settings and reboot live in the menu
- * so the header no longer competes with the content cards below it.
+ * Title + live status on the left; on the right an optional unread SMS badge button,
+ * a pause/resume toggle, and an overflow menu with Refresh, poll interval, and Reboot.
  */
 @Composable
 fun HeaderBar(
@@ -35,15 +43,16 @@ fun HeaderBar(
     isPaused: Boolean,
     pollInterval: Float,
     routerHost: String,
+    smsUnreadCount: Int = 0,
+    onOpenSms: () -> Unit = {},
     onTogglePause: () -> Unit,
     onForceRefresh: () -> Unit,
     onSelectPollInterval: (Float) -> Unit,
-    onOpenDns: () -> Unit,
     onOpenReboot: () -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val semantic = AirtelTheme.colors
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -57,11 +66,11 @@ fun HeaderBar(
     )
 
     val (statusText, statusColor) = when {
-        isPaused -> "Paused" to StatusWarning
-        connectionStatus == ConnectionStatus.CONNECTED -> "Live" to StatusSuccess
-        connectionStatus == ConnectionStatus.CONNECTING -> "Connecting" to MaterialTheme.colorScheme.primary
-        connectionStatus == ConnectionStatus.RECONNECTING -> "Reconnecting" to StatusError
-        else -> "Offline" to StatusError
+        isPaused -> stringResource(R.string.status_paused) to semantic.warning
+        connectionStatus == ConnectionStatus.CONNECTED -> stringResource(R.string.status_live) to semantic.success
+        connectionStatus == ConnectionStatus.CONNECTING -> stringResource(R.string.status_connecting) to MaterialTheme.colorScheme.primary
+        connectionStatus == ConnectionStatus.RECONNECTING -> stringResource(R.string.status_reconnecting) to semantic.error
+        else -> stringResource(R.string.status_offline) to semantic.error
     }
     val pulsing = connectionStatus == ConnectionStatus.CONNECTED && !isPaused
 
@@ -93,7 +102,7 @@ fun HeaderBar(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = "Airtel 5G",
+                text = stringResource(R.string.brand_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -117,7 +126,7 @@ fun HeaderBar(
                     color = statusColor
                 )
                 Text(
-                    text = "· ${formatInterval(pollInterval)} · $routerHost",
+                    text = "· ${NetworkFormatters.formatPollInterval(pollInterval)} · $routerHost",
                     style = MaterialTheme.typography.labelMedium,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
@@ -128,11 +137,31 @@ fun HeaderBar(
             }
         }
 
+        if (smsUnreadCount > 0) {
+            IconButton(onClick = onOpenSms) {
+                BadgedBox(
+                    badge = {
+                        Badge {
+                            Text(if (smsUnreadCount > 99) "99+" else smsUnreadCount.toString())
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Email,
+                        contentDescription = stringResource(R.string.cd_unread_sms),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         IconButton(onClick = onTogglePause) {
             Icon(
                 imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                contentDescription = if (isPaused) "Resume" else "Pause",
-                tint = if (isPaused) StatusWarning else MaterialTheme.colorScheme.onSurfaceVariant
+                contentDescription = stringResource(
+                    if (isPaused) R.string.cd_resume_polling else R.string.cd_pause_polling
+                ),
+                tint = if (isPaused) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -140,7 +169,7 @@ fun HeaderBar(
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More",
+                    contentDescription = stringResource(R.string.cd_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -152,14 +181,14 @@ fun HeaderBar(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
                 DropdownMenuItem(
-                    text = { Text("Refresh now") },
+                    text = { Text(stringResource(R.string.menu_refresh_now)) },
                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                     onClick = { menuExpanded = false; onForceRefresh() }
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 Text(
-                    text = "Update every",
+                    text = stringResource(R.string.menu_update_every),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
@@ -169,7 +198,7 @@ fun HeaderBar(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = formatInterval(interval),
+                                text = NetworkFormatters.formatPollInterval(interval),
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
@@ -184,24 +213,11 @@ fun HeaderBar(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 DropdownMenuItem(
-                    text = { Text("DNS") },
-                    leadingIcon = { Icon(Icons.Outlined.Dns, contentDescription = null) },
-                    onClick = { menuExpanded = false; onOpenDns() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Settings") },
-                    leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                    onClick = { menuExpanded = false; onOpenSettings() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Reboot router", color = StatusError) },
-                    leadingIcon = { Icon(Icons.Default.PowerSettingsNew, contentDescription = null, tint = StatusError) },
+                    text = { Text(stringResource(R.string.menu_reboot_router), color = semantic.error) },
+                    leadingIcon = { Icon(Icons.Default.PowerSettingsNew, contentDescription = null, tint = semantic.error) },
                     onClick = { menuExpanded = false; onOpenReboot() }
                 )
             }
         }
     }
 }
-
-private fun formatInterval(seconds: Float): String =
-    if (seconds % 1f == 0f) "${seconds.toInt()}s" else "${seconds}s"

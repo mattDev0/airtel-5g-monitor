@@ -1,7 +1,7 @@
 ﻿package com.airtel.monitor.data.local
 
 import android.content.Context
-import com.airtel.monitor.data.remote.AliasLookup
+import com.airtel.monitor.core.network.AliasLookup
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap

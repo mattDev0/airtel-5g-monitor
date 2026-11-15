@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.airtel.monitor.ui.theme
 
 import android.os.Build
@@ -9,8 +11,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalContext
+import com.airtel.monitor.core.datastore.ThemePreference
 
 private val DarkColorScheme = darkColorScheme(
     primary = DarkPrimary,
@@ -38,8 +42,10 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest = DarkSurfaceContainerHighest,
     outline = DarkOutline,
     outlineVariant = DarkOutlineVariant,
-    error = StatusError,
-    onError = Color.White
+    error = DarkError,
+    onError = DarkOnError,
+    errorContainer = DarkErrorContainer,
+    onErrorContainer = DarkOnErrorContainer
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -68,16 +74,41 @@ private val LightColorScheme = lightColorScheme(
     surfaceContainerHighest = LightSurfaceContainerHighest,
     outline = LightOutline,
     outlineVariant = LightOutlineVariant,
-    error = StatusError,
-    onError = Color.White
+    error = LightError,
+    onError = LightOnError,
+    errorContainer = LightErrorContainer,
+    onErrorContainer = LightOnErrorContainer
 )
+
+object AirtelTheme {
+    val spacing: AirtelSpacing
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAirtelSpacing.current
+
+    val colors: AirtelSemanticColors
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAirtelColors.current
+
+    val shapes: AirtelShapeTokens
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAirtelShapes.current
+}
 
 @Composable
 fun AirtelMonitorTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    themePreference: ThemePreference = ThemePreference.SYSTEM,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val darkTheme = when (themePreference) {
+        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+        ThemePreference.DARK -> true
+        ThemePreference.LIGHT -> false
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -87,10 +118,19 @@ fun AirtelMonitorTheme(
         else -> LightColorScheme
     }
 
-    // System bar icon contrast is handled by enableEdgeToEdge() in MainActivity.
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        motionScheme = MotionScheme.expressive(),
-        content = content
-    )
+    val semanticColors = if (darkTheme) DarkAirtelSemanticColors else LightAirtelSemanticColors
+
+    CompositionLocalProvider(
+        LocalAirtelSpacing provides AirtelSpacing(),
+        LocalAirtelColors provides semanticColors,
+        LocalAirtelShapes provides AirtelShapeTokens()
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            typography = AirtelTypography,
+            shapes = AirtelMaterialShapes,
+            motionScheme = MotionScheme.expressive(),
+            content = content
+        )
+    }
 }

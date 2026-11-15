@@ -24,9 +24,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airtel.monitor.data.dto.formatBandPill
+import com.airtel.monitor.data.dto.formatCaSummary
+import com.airtel.monitor.data.dto.formatCellPill
 import com.airtel.monitor.data.model.CellLockInfo
 import com.airtel.monitor.data.model.CellularMetrics
 import com.airtel.monitor.data.model.HardwareMetrics
+import com.airtel.monitor.domain.CarrierComponent
+import com.airtel.monitor.domain.CarrierTech
 import com.airtel.monitor.ui.theme.StatusSuccess
 import com.airtel.monitor.ui.theme.StatusWarning
 
@@ -34,6 +39,7 @@ import com.airtel.monitor.ui.theme.StatusWarning
 fun CellularCellLockCard(
     cellLock: CellLockInfo,
     cellular: CellularMetrics,
+    carriers: List<CarrierComponent> = emptyList(),
     hardware: HardwareMetrics? = null,
     onEditLocks: (() -> Unit)? = null,
     networkBusy: Boolean = false,
@@ -104,41 +110,16 @@ fun CellularCellLockCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                fun formatBands(raw: String, prefix: String): String {
-                    val items = raw.split("+")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() && it != "-" }
-                        .map { prefix + it.removePrefix(prefix.lowercase()).removePrefix(prefix.uppercase()) }
-                        .filter { it.length > prefix.length }
-                    return if (items.isEmpty()) "-" else items.joinToString("+")
+                val bandText = if (carriers.isNotEmpty()) {
+                    formatBandPill(carriers)
+                } else {
+                    fallbackBandPill(cellLock)
                 }
-
-                val bandText = when {
-                    cellLock.currentBand5g.isNotBlank() && cellLock.currentBand5g != "-" -> {
-                        val formatted = formatBands(cellLock.currentBand5g, "n")
-                        if (formatted != "-") formatted else "-"
-                    }
-                    cellLock.currentBands4g.isNotBlank() && cellLock.currentBands4g != "-" -> {
-                        val formatted = formatBands(cellLock.currentBands4g, "B")
-                        if (formatted != "-") formatted else "-"
-                    }
-                    else -> "-"
+                val pciText = if (carriers.isNotEmpty()) {
+                    formatCellPill(carriers)
+                } else {
+                    fallbackCellPill(cellLock)
                 }
-
-                // With carrier aggregation the router may report several cells
-                // ("393+120", "393,120"); show the primary one and a "+N" count.
-                fun formatPci(raw: String): String? {
-                    val ids = raw.removePrefix("PCI").removePrefix("pci")
-                        .split('+', ',', ';', '/', ' ')
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() && it != "-" && it != "null" }
-                    if (ids.isEmpty()) return null
-                    return if (ids.size == 1) "PCI ${ids[0]}" else "${ids[0]} +${ids.size - 1}"
-                }
-
-                val pciText = formatPci(cellLock.servingPci5g)
-                    ?: formatPci(cellLock.servingPci4g)
-                    ?: "-"
 
                 TelemetryPill(label = "Band", value = bandText, modifier = Modifier.weight(1f))
                 TelemetryPill(label = "Cell", value = pciText, modifier = Modifier.weight(1f))
@@ -212,17 +193,23 @@ fun CellularCellLockCard(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (carriers.isNotEmpty()) {
+                        DetailRow(title = "Carrier Aggregation", value = formatCaSummary(carriers))
+                    }
                     DetailRow(title = "5G Serving EARFCN/ARFCN", value = cellLock.servingFreq5g)
                     DetailRow(title = "4G Serving PCI / EARFCN", value = "${cellLock.servingPci4g} / ${cellLock.servingFreq4g}")
                     DetailRow(
                         title = "4G Active Bands",
-                        value = if (cellLock.currentBands4g.isNotBlank() && cellLock.currentBands4g != "-") {
-                            val formatted = cellLock.currentBands4g.split("+")
-                                .map { it.trim().removePrefix("b").removePrefix("B") }
-                                .filter { it.isNotEmpty() && it != "-" }
-                                .joinToString(" + ") { "B$it" }
-                            if (formatted.isNotEmpty()) formatted else "-"
-                        } else "-"
+                        value = carriers
+                            .filter { it.tech == CarrierTech.LTE && it.band.isNotBlank() }
+                            .joinToString(" + ") { it.band }
+                            .ifEmpty {
+                                cellLock.currentBands4g.split("+")
+                                    .map { it.trim().removePrefix("b").removePrefix("B") }
+                                    .filter { it.isNotEmpty() && it != "-" }
+                                    .joinToString(" + ") { "B$it" }
+                                    .ifEmpty { "-" }
+                            }
                     )
                     DetailRow(title = "4G Signal (RSRP / SINR)", value = "${cellular.rsrp4g} dBm / ${cellular.sinr4g} dB")
                     DetailRow(title = "5G CQI / 4G CQI", value = "${cellular.nrCqi} / ${cellular.lteCqi}")
@@ -441,5 +428,37 @@ private fun DetailRow(title: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+private fun fallbackBandPill(cellLock: CellLockInfo): String {
+    fun formatBands(raw: String, prefix: String): String {
+        val items = raw.split("+")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != "-" }
+            .map { prefix + it.removePrefix(prefix.lowercase()).removePrefix(prefix.uppercase()) }
+            .filter { it.length > prefix.length }
+        return if (items.isEmpty()) "-" else items.joinToString("+")
+    }
+    return when {
+        cellLock.currentBand5g.isNotBlank() && cellLock.currentBand5g != "-" ->
+            formatBands(cellLock.currentBand5g, "n")
+        cellLock.currentBands4g.isNotBlank() && cellLock.currentBands4g != "-" ->
+            formatBands(cellLock.currentBands4g, "B")
+        else -> "-"
+    }
+}
+
+private fun fallbackCellPill(cellLock: CellLockInfo): String {
+    fun formatPci(raw: String): String? {
+        val ids = raw.removePrefix("PCI").removePrefix("pci")
+            .split('+', ',', ';', '/', ' ')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != "-" && it != "null" }
+        if (ids.isEmpty()) return null
+        return if (ids.size == 1) "PCI ${ids[0]}" else "${ids[0]} +${ids.size - 1}"
+    }
+    return formatPci(cellLock.servingPci5g)
+        ?: formatPci(cellLock.servingPci4g)
+        ?: "-"
 }
 

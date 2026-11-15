@@ -1,5 +1,7 @@
 package com.airtel.monitor.data.model
 
+import com.airtel.monitor.domain.CarrierComponent
+
 enum class DeviceType {
     PHONE,
     TABLET,
@@ -144,6 +146,7 @@ data class RouterState(
     val timeFormatted: String = "",
     val wan: WanMetrics = WanMetrics(),
     val cellular: CellularMetrics = CellularMetrics(),
+    val carriers: List<CarrierComponent> = emptyList(),
     val cellLock: CellLockInfo = CellLockInfo(),
     val hardware: HardwareMetrics = HardwareMetrics(),
     val devices: List<DeviceItem> = emptyList(),

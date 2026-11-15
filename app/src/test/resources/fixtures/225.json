@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "cmd": 225,
+  "wlan5g_wifi_info": [
+    {
+      "mac": "02:11:22:33:44:01",
+      "ip": "192.168.1.192",
+      "rssi": "-58",
+      "txrate": "1201",
+      "rxrate": "960",
+      "ssid": "Airtel_5G_Test"
+    }
+  ]
+}

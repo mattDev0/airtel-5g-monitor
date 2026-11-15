@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "cmd": 3,
+  "lanIp": "192.168.1.1",
+  "netMask": "255.255.255.0",
+  "dhcpServer": "1",
+  "main_dns": "1.1.1.1",
+  "vice_dns": "8.8.8.8",
+  "ipBegin": "192.168.1.100",
+  "ipEnd": "192.168.1.200",
+  "expireTime": "24h",
+  "bindPort0": "f0f0f",
+  "ipv6_mode": "0",
+  "ipv6_startIp": "64",
+  "ipv6_endIp": "ffaa",
+  "ipv6_main_dns": "",
+  "ipv6_vice_dns": "",
+  "relay_sw": "0",
+  "mtu": "1500",
+  "domain": "m.home",
+  "supportList": "70F0F03",
+  "lanMark": "1"
+}
