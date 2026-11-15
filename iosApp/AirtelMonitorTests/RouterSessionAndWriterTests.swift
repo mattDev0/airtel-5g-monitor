@@ -242,15 +242,15 @@ final class RouterSessionAndWriterTests: XCTestCase {
         let keychain = InMemoryKeychainStore()
         let store = AppPreferencesStore(defaults: defaults, keychain: keychain)
 
-        XCTAssertEqual(store.host, "192.168.1.1")
+        XCTAssertEqual(store.routerHost, "192.168.1.1")
         XCTAssertEqual(store.username, "user")
         XCTAssertFalse(store.onboardingCompleted)
 
         store.updateConnectionSettings(host: "http://192.168.8.1/", username: "admin", password: "pw123")
-        XCTAssertEqual(store.host, "192.168.8.1")
+        XCTAssertEqual(store.routerHost, "192.168.8.1")
         XCTAssertEqual(store.username, "admin")
         XCTAssertEqual(store.password, "pw123")
-        XCTAssertEqual(keychain.readPassword(account: "admin"), "pw123")
+        XCTAssertEqual(keychain.readPassword(account: "router_admin_password"), "pw123")
 
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(secondsFromGMT: 0)!

@@ -122,8 +122,8 @@ final class ParsersAndValidatorsTests: XCTestCase {
 
     func testValidatorsAndUssdUtf16BeDecoder() {
         XCTAssertNotNil(WifiAndLanValidators.validateSsid("Admin", forbiddenSsids: ["Admin"]))
-        XCTAssertNotNil(WifiAndLanValidators.validateWifiPassword("12345678", forbiddenPasswords: ["12345678"]))
-        XCTAssertNil(WifiAndLanValidators.validateWifiPassword("StrongPass#2026"))
+        XCTAssertNotNil(WifiAndLanValidators.validateWifiPassword("12345678", authenticationType: "2", forbiddenKeys: ["12345678"]))
+        XCTAssertNil(WifiAndLanValidators.validateWifiPassword("StrongPass#2026", authenticationType: "2"))
 
         XCTAssertNil(WifiAndLanValidators.validateDhcpSettings(
             lanIp: "192.168.1.1",
@@ -164,6 +164,7 @@ final class ParsersAndValidatorsTests: XCTestCase {
         XCTAssertEqual(SensitiveFormatters.maskIdentifier("123456789012345"), "•••••••••••2345")
     }
 
+    @MainActor
     func testBuildNetworkModeSummary() {
         let state = RouterState(
             timestampMs: 0,

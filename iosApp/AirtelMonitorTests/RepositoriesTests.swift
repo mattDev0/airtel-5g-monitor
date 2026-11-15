@@ -12,7 +12,7 @@ final class RepositoriesTests: XCTestCase {
         prefs.updateConnectionSettings(host: "192.168.1.1", username: "user", password: "secret")
         let session = RouterSession(
             transport: transport,
-            credentialsProvider: { prefs.currentCredentials() }
+            credentialsProvider: { await prefs.currentCredentials }
         )
         let writer = SettingsWriter(session: session, sleepFn: { _ in })
         return (transport, session, writer, prefs)
