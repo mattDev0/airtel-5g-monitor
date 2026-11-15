@@ -190,7 +190,7 @@ final class ParsersAndValidatorsTests: XCTestCase {
         let summary = SettingsHubViewModel.buildNetworkModeSummary(state)
         XCTAssertTrue(summary.contains("5G_NSA"))
         XCTAssertTrue(summary.contains("LTE CA"))
-        XCTAssertTrue(summary.contains("5G CA"))
+        XCTAssertTrue(summary.contains("NR CA"))
         XCTAssertTrue(summary.contains("Roaming"))
     }
 }
