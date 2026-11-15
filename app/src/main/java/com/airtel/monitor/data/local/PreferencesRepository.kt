@@ -47,7 +47,12 @@ class PreferencesRepository private constructor(
         themeMode: ThemePreference? = null,
         speedUnit: SpeedUnitPreference? = null,
         maskSensitive: Boolean? = null,
-        onboardingCompleted: Boolean? = null
+        onboardingCompleted: Boolean? = null,
+        backgroundMonitorEnabled: Boolean? = null,
+        notifyQuotaWarning: Boolean? = null,
+        notifyNewSms: Boolean? = null,
+        notifyNewDevice: Boolean? = null,
+        notifyUnreachable: Boolean? = null
     ) = store.updateSettings(
         host = host,
         user = user,
@@ -56,7 +61,12 @@ class PreferencesRepository private constructor(
         themeMode = themeMode,
         speedUnit = speedUnit,
         maskSensitive = maskSensitive,
-        onboardingCompleted = onboardingCompleted
+        onboardingCompleted = onboardingCompleted,
+        backgroundMonitorEnabled = backgroundMonitorEnabled,
+        notifyQuotaWarning = notifyQuotaWarning,
+        notifyNewSms = notifyNewSms,
+        notifyNewDevice = notifyNewDevice,
+        notifyUnreachable = notifyUnreachable
     )
 
     companion object {

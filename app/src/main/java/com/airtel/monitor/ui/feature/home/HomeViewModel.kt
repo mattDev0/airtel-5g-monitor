@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.airtel.monitor.core.datastore.SpeedUnitPreference
 import com.airtel.monitor.core.di.AppContainer
 import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.errorMessage
@@ -26,6 +27,7 @@ data class HomeUiState(
     val routerState: RouterState? = null,
     val wifiRadios: WifiRadioConfig? = null,
     val smsUnreadCount: Int = 0,
+    val speedUnit: SpeedUnitPreference = SpeedUnitPreference.MBPS,
     val networkActionBusy: Boolean = false,
     val showLockEditor: Boolean = false,
     val lockSettings: LockSettings? = null,
@@ -41,25 +43,40 @@ class HomeViewModel(
     private val local = MutableStateFlow(LocalHomeState())
     private var initialWifiLoaded = false
 
-    val uiState: StateFlow<HomeUiState> = combine(
+    private val repoState = combine(
         container.statusRepository.routerState,
         container.signalRepository.lockSettings,
         container.wifiRepository.config,
-        container.statusRepository.smsUnreadCount,
+        container.statusRepository.smsUnreadCount
+    ) { routerState, lockSettings, wifiConfig, smsUnread ->
+        QuadHomeRepo(routerState, lockSettings, wifiConfig, smsUnread)
+    }
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        repoState,
+        container.preferencesRepository.preferencesFlow,
         local
-    ) { routerState, lockSettings, wifiConfig, smsUnread, loc ->
+    ) { repo, prefs, loc ->
         HomeUiState(
-            routerState = routerState,
-            wifiRadios = wifiConfig,
-            smsUnreadCount = smsUnread,
+            routerState = repo.routerState,
+            wifiRadios = repo.wifiConfig,
+            smsUnreadCount = repo.smsUnread,
+            speedUnit = prefs.speedUnit,
             networkActionBusy = loc.networkActionBusy,
             showLockEditor = loc.showLockEditor,
-            lockSettings = lockSettings,
+            lockSettings = repo.lockSettings,
             lockLoading = loc.lockLoading,
             lockSaving = loc.lockSaving,
             lockMessage = loc.lockMessage
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+
+    private data class QuadHomeRepo(
+        val routerState: RouterState?,
+        val lockSettings: LockSettings?,
+        val wifiConfig: WifiRadioConfig?,
+        val smsUnread: Int
+    )
 
     fun ensureWifiRadiosLoaded() {
         if (initialWifiLoaded) return

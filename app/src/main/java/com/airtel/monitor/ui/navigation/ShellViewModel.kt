@@ -28,6 +28,8 @@ data class ShellUiState(
     val smsUnreadCount: Int = 0,
     val isAuthError: Boolean = false,
     val themePreference: ThemePreference = ThemePreference.SYSTEM,
+    val preferencesLoaded: Boolean = false,
+    val onboardingCompleted: Boolean = true,
     val showRebootConfirm: Boolean = false,
     val isRebooting: Boolean = false
 )
@@ -62,6 +64,8 @@ class ShellViewModel(
             smsUnreadCount = smsUnread,
             isAuthError = lastErr is RouterResult.NotLoggedIn,
             themePreference = prefs.themeMode,
+            preferencesLoaded = prefs.isLoaded,
+            onboardingCompleted = prefs.onboardingCompleted,
             showRebootConfirm = local.showRebootConfirm,
             isRebooting = local.isRebooting
         )

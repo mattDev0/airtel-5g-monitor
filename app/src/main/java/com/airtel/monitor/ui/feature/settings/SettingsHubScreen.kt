@@ -2,8 +2,12 @@
 
 package com.airtel.monitor.ui.feature.settings
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.NetworkCheck
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Router
@@ -50,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.airtel.monitor.R
 import com.airtel.monitor.core.datastore.SpeedUnitPreference
 import com.airtel.monitor.core.datastore.ThemePreference
+import com.airtel.monitor.core.notifications.RouterNotificationHelper
 import com.airtel.monitor.core.util.NetworkFormatters
 import com.airtel.monitor.data.model.SimPinState
 import com.airtel.monitor.data.model.WifiBandDetail
@@ -63,6 +69,7 @@ import com.airtel.monitor.ui.designsystem.SettingRow
 import com.airtel.monitor.ui.designsystem.SettingSwitchRow
 import com.airtel.monitor.ui.designsystem.SettingValueRow
 import com.airtel.monitor.ui.theme.AirtelTheme
+import com.airtel.monitor.work.RouterMonitorScheduler
 
 private enum class PendingConnectivityConfirm {
     WIFI_24G_OFF,
@@ -79,7 +86,8 @@ fun SettingsHubScreen(
     onOpenMessages: () -> Unit = {},
     onOpenDataUsage: () -> Unit = {},
     onOpenSecurity: () -> Unit = {},
-    onOpenSystemTools: () -> Unit = {}
+    onOpenSystemTools: () -> Unit = {},
+    onOpenSetupWizard: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val spacing = AirtelTheme.spacing
@@ -88,6 +96,16 @@ fun SettingsHubScreen(
     val resources = LocalResources.current
 
     var pendingConfirm by remember { mutableStateOf<PendingConnectivityConfirm?>(null) }
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            viewModel.emitFeedback(resources.getString(R.string.settings_notif_permission_denied))
+        }
+        viewModel.setBackgroundMonitoring(true)
+        RouterMonitorScheduler.syncPeriodicMonitor(context, enabled = true)
+    }
 
     val copyToClipboard: (String, String) -> Unit = { label, value ->
         if (value.isNotBlank()) {
@@ -494,6 +512,94 @@ fun SettingsHubScreen(
                         }
                     }
                 }
+            }
+        }
+
+        item(key = "section_notifications") {
+            SectionCard(
+                title = stringResource(R.string.settings_notifications_title),
+                subtitle = stringResource(R.string.settings_notifications_subtitle)
+            ) {
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_bg_monitor_enable),
+                    subtitle = stringResource(R.string.settings_bg_monitor_desc),
+                    checked = uiState.backgroundMonitorEnabled,
+                    leadingIcon = Icons.Rounded.Notifications,
+                    onCheckedChange = { enable ->
+                        if (enable) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                !RouterNotificationHelper.hasNotificationPermission(context)
+                            ) {
+                                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                viewModel.setBackgroundMonitoring(true)
+                                RouterMonitorScheduler.syncPeriodicMonitor(context, enabled = true)
+                            }
+                        } else {
+                            viewModel.setBackgroundMonitoring(false)
+                            RouterMonitorScheduler.syncPeriodicMonitor(context, enabled = false)
+                        }
+                    }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_notify_quota),
+                    subtitle = stringResource(R.string.settings_notify_quota_desc),
+                    checked = uiState.notifyQuotaWarning,
+                    enabled = uiState.backgroundMonitorEnabled,
+                    onCheckedChange = viewModel::setNotifyQuotaWarning
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_notify_sms),
+                    subtitle = stringResource(R.string.settings_notify_sms_desc),
+                    checked = uiState.notifyNewSms,
+                    enabled = uiState.backgroundMonitorEnabled,
+                    onCheckedChange = viewModel::setNotifyNewSms
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_notify_device),
+                    subtitle = stringResource(R.string.settings_notify_device_desc),
+                    checked = uiState.notifyNewDevice,
+                    enabled = uiState.backgroundMonitorEnabled,
+                    onCheckedChange = viewModel::setNotifyNewDevice
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_notify_unreachable),
+                    subtitle = stringResource(R.string.settings_notify_unreachable_desc),
+                    checked = uiState.notifyUnreachable,
+                    enabled = uiState.backgroundMonitorEnabled,
+                    onCheckedChange = viewModel::setNotifyUnreachable
+                )
+            }
+        }
+
+        item(key = "section_about_setup") {
+            val appVersion = remember(context) {
+                runCatching {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                }.getOrNull().orEmpty().ifBlank { "3.0.0-dev" }
+            }
+            SectionCard(title = stringResource(R.string.settings_about_app_title)) {
+                SettingRow(
+                    title = stringResource(R.string.settings_setup_wizard_title),
+                    subtitle = stringResource(R.string.settings_setup_wizard_subtitle),
+                    leadingIcon = Icons.Rounded.Router,
+                    onClick = onOpenSetupWizard
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingValueRow(
+                    label = stringResource(R.string.settings_app_version_label),
+                    value = appVersion
+                )
+                Text(
+                    text = stringResource(R.string.settings_licenses_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = spacing.xs)
+                )
             }
         }
     }

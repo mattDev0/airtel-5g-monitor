@@ -3,6 +3,7 @@ package com.airtel.monitor.core.di
 import android.app.Application
 import com.airtel.monitor.core.network.OkHttpRouterTransport
 import com.airtel.monitor.core.network.PollingCoordinator
+import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.network.RouterTransport
 import com.airtel.monitor.core.network.SettingsWriter
@@ -10,6 +11,7 @@ import com.airtel.monitor.core.util.OuiVendorLookup
 import com.airtel.monitor.data.local.AliasRepository
 import com.airtel.monitor.data.local.PreferencesRepository
 import com.airtel.monitor.data.local.SharedPreferencesDailyUsageStore
+import com.airtel.monitor.data.local.SharedPreferencesMonitorStateStore
 import com.airtel.monitor.data.remote.SpeedTestRunner
 import com.airtel.monitor.data.repository.DeviceRepository
 import com.airtel.monitor.data.repository.LanRepository
@@ -21,6 +23,9 @@ import com.airtel.monitor.data.repository.SmsRepository
 import com.airtel.monitor.data.repository.StatusRepository
 import com.airtel.monitor.data.repository.SystemRepository
 import com.airtel.monitor.data.repository.WifiRepository
+import com.airtel.monitor.widget.RouterWidgetStore
+import com.airtel.monitor.widget.RouterWidgetUpdater
+import com.airtel.monitor.widget.WidgetFormatter
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -39,6 +44,8 @@ class AppContainer(application: Application) {
     val preferencesRepository = PreferencesRepository(application)
     val aliasRepository = AliasRepository(application)
     val dailyUsageStore = SharedPreferencesDailyUsageStore(application)
+    val monitorStateStore = SharedPreferencesMonitorStateStore(application)
+    val widgetStore = RouterWidgetStore(application)
     val ouiVendorLookup = OuiVendorLookup.fromAsset(application)
 
     val transport: RouterTransport = OkHttpRouterTransport()
@@ -63,7 +70,19 @@ class AppContainer(application: Application) {
 
     val pollingCoordinator = PollingCoordinator(
         pollIntervalProvider = { (preferencesRepository.pollIntervalSeconds * 1000L).toLong().coerceAtLeast(500L) },
-        onNormalTick = { forceSlow -> statusRepository.pollFast(forceSlow = forceSlow) },
+        onNormalTick = { forceSlow ->
+            val result = statusRepository.pollFast(forceSlow = forceSlow)
+            if (result is RouterResult.Ok) {
+                widgetStore.save(
+                    WidgetFormatter.buildSnapshot(
+                        state = result.data,
+                        dailyEntries = dailyUsageStore.history.value
+                    )
+                )
+                RouterWidgetUpdater.pushUpdate(application)
+            }
+            result
+        },
         onAlignmentTick = { statusRepository.pollAlignment() }
     )
 }

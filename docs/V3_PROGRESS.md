@@ -242,3 +242,35 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 
 ### Blocked / Deferred
 - Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/` (`dmz`, `upnp`, `ddos`, `portForward`, `ipFilter`, `urlFilter`, `timeSet`, `wanLinkDetect`, standalone `restoreFactory` `cmd 112`).
+
+---
+
+## Phase 6 — Onboarding, Worker, Notifications, Widget & Speed Units
+
+**Status:** Complete (WorkManager 15-minute Wi-Fi-gated background monitor, deduplicated alerts across 4 notification channels, API 33+ contextual `POST_NOTIFICATIONS` prompt, 2x2 & 4x2 `RemoteViews` home-screen widgets, first-launch gateway auto-detection onboarding wizard, and `Mbps` / `MB/s` speed-unit toggle)
+
+### Implemented
+- **Dependencies & Preferences (`gradle/libs.versions.toml`, `app/build.gradle`, `AppPreferencesRepository.kt`, `PreferencesRepository.kt`, `NetworkFormatters.kt`):**
+  - Added `androidx.work:work-runtime-ktx` (`2.10.3`) and aligned cached `lifecycleCompose` (`2.11.0`) + `savedstate` (`1.5.0`) constraints (using native `AppWidgetProvider` + `RemoteViews` instead of `androidx.glance` since Glance artifacts are not in the local offline cache).
+  - Extended `AppPreferencesSnapshot` with `isLoaded`, `backgroundMonitorEnabled`, and notification toggles (`notifyQuotaWarning`, `notifyNewSms`, `notifyNewDevice`, `notifyUnreachable`); automatically marks `onboardingCompleted = true` when legacy v2 credentials migrate.
+  - Added `NetworkFormatters.formatThroughput` and `formatPeakThroughput` supporting `Mbps` vs `MB/s` (`/ 8.0`) and wired `speedUnit` into `MinimalWanSpeedCard` (`HeroMetricCards.kt`, `HomeViewModel.kt`, `HomeScreen.kt`).
+- **Gateway Detection & Notification Deduplication (`GatewayDetector.kt`, `MonitorAlertEvaluator.kt`, `MonitorStateStore.kt`, `RouterNotificationHelper.kt`):**
+  - Implemented `GatewayDetector` (`ConnectivityManager` active Wi-Fi transport default route / DHCP IPv4 server extraction + `/24` expected-subnet check).
+  - Implemented `MonitorAlertEvaluator` pure-Kotlin state machine + `MonitorStateStore` (`InMemoryMonitorStateStore` / `SharedPreferencesMonitorStateStore`) deduplicating quota warnings (once per cycle), unread SMS count deltas (silent initial baseline), opt-in new MAC discovery (normalized, silent baseline), and 2x consecutive poll failures (`RouterUnreachable` + single `RouterRecovered`).
+  - Created 4 notification channels (`quota`, `sms`, `devices`, `connectivity`) in `RouterNotificationHelper` with API 33+ permission guard and deep-link `PendingIntent`.
+- **Background Worker & Home-Screen Widgets (`RouterMonitorWorker.kt`, `RouterMonitorScheduler.kt`, `RouterWidgetStore.kt`, `RouterWidgetProviders.kt`, `res/layout/widget_router_*.xml`, `res/drawable/widget_*.xml`, `res/xml/router_widget_*_info.xml`, `AndroidManifest.xml`, `AppContainer.kt`, `AirtelMonitorApplication.kt`):**
+  - Added 15-minute `PeriodicWorkRequest` + immediate tap-to-refresh `OneTimeWorkRequest`; skips off-Wi-Fi runs without incrementing unreachable count and pushes live snapshots on both background worker runs and foreground coordinator ticks.
+  - Added 2x2 (`RouterCompactWidgetProvider`) and 4x2 (`RouterExpandedWidgetProvider`) home-screen widgets showing network type, 5-bar signal level, RSRP (4x2), today/monthly data, connected client count, status timestamp, and tap-to-refresh action.
+  - Declared `POST_NOTIFICATIONS` and widget receivers in `AndroidManifest.xml`, and ensured notification channels & WorkManager schedule sync on app start without prompting permissions on launch.
+- **Onboarding Wizard & Notification Settings (`OnboardingViewModel.kt`, `OnboardingScreen.kt`, `SettingsHubViewModel.kt`, `SettingsHubScreen.kt`, `ShellViewModel.kt`, `Routes.kt`, `AppShell.kt`, `strings.xml`):**
+  - Built first-launch `OnboardingScreen` pre-filling detected Wi-Fi gateway IP, warning when not on Wi-Fi, running isolated login/info probes distinguishing wrong credentials from unreachable hosts, and offering `Run Setup Wizard` + `App Version` in `SettingsHubScreen`.
+  - Gated initial onboarding route on `shellState.preferencesLoaded && !shellState.onboardingCompleted` to avoid first-launch flicker, and added contextual `POST_NOTIFICATIONS` request in `SettingsHubScreen` when enabling Background Monitoring.
+- **Tests:**
+  - Added `OnboardingAndMonitorTest.kt` (`6` tests covering `GatewayDetector`, `MonitorAlertEvaluator` quota/SMS/device/unreachable state transitions, `NetworkFormatters` throughput units, `WidgetFormatter.buildSnapshot`, and `OnboardingViewModel` probes & save).
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`88` unit tests across `16` test suites: `0` skipped, `0` failures, `0` errors; `lintDebug` passed with `0` errors and `35` SARIF entries (`0` new warnings); `assembleDebug` built `app-debug.apk`).
+
+### Untested on Device / Live Router
+- End-to-end WorkManager 15-minute periodic trigger, `POST_NOTIFICATIONS` runtime prompt on Android 13+ device, and home-screen widget pinning / tap-to-refresh on a physical launcher.
+- Live router onboarding probe against physical ZLT X17M/W304VA PRO gateway IP.

@@ -53,6 +53,11 @@ data class SettingsHubUiState(
     val themePreference: ThemePreference = ThemePreference.SYSTEM,
     val speedUnitPreference: SpeedUnitPreference = SpeedUnitPreference.MBPS,
     val maskSensitive: Boolean = true,
+    val backgroundMonitorEnabled: Boolean = false,
+    val notifyQuotaWarning: Boolean = true,
+    val notifyNewSms: Boolean = true,
+    val notifyNewDevice: Boolean = false,
+    val notifyUnreachable: Boolean = true,
     val showConnectionDialog: Boolean = false,
     val activeSheet: ActiveSettingsSheet? = null,
     val wifiRadioConfig: WifiRadioConfig = WifiRadioConfig(),
@@ -102,7 +107,14 @@ class SettingsHubViewModel internal constructor(
     private val emitStatusMessage: (String) -> Unit,
     private val onIntervalChanged: () -> Unit,
     private val triggerRefresh: (Boolean) -> Unit,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val updateNotificationPrefs: (
+        bgMonitor: Boolean?,
+        quota: Boolean?,
+        sms: Boolean?,
+        device: Boolean?,
+        unreachable: Boolean?
+    ) -> Unit = { _, _, _, _, _ -> }
 ) : ViewModel() {
 
     constructor(container: AppContainer) : this(
@@ -128,7 +140,16 @@ class SettingsHubViewModel internal constructor(
         systemRepository = container.systemRepository,
         emitStatusMessage = container::emitStatusMessage,
         onIntervalChanged = { container.pollingCoordinator.onIntervalChanged() },
-        triggerRefresh = { includeSlow -> container.pollingCoordinator.triggerImmediateRefresh(includeSlow) }
+        triggerRefresh = { includeSlow -> container.pollingCoordinator.triggerImmediateRefresh(includeSlow) },
+        updateNotificationPrefs = { bgMonitor, quota, sms, device, unreachable ->
+            container.preferencesRepository.updateSettings(
+                backgroundMonitorEnabled = bgMonitor,
+                notifyQuotaWarning = quota,
+                notifyNewSms = sms,
+                notifyNewDevice = device,
+                notifyUnreachable = unreachable
+            )
+        }
     )
 
     private val local = MutableStateFlow(LocalSettingsState())
@@ -168,6 +189,11 @@ class SettingsHubViewModel internal constructor(
             themePreference = prefs.themeMode,
             speedUnitPreference = prefs.speedUnit,
             maskSensitive = prefs.maskSensitive,
+            backgroundMonitorEnabled = prefs.backgroundMonitorEnabled,
+            notifyQuotaWarning = prefs.notifyQuotaWarning,
+            notifyNewSms = prefs.notifyNewSms,
+            notifyNewDevice = prefs.notifyNewDevice,
+            notifyUnreachable = prefs.notifyUnreachable,
             showConnectionDialog = loc.showConnectionDialog,
             activeSheet = loc.activeSheet,
             wifiRadioConfig = wifiCfg ?: WifiRadioConfig(),
@@ -273,6 +299,26 @@ class SettingsHubViewModel internal constructor(
 
     fun setMaskSensitive(mask: Boolean) {
         updatePreferences(null, null, null, null, null, null, mask)
+    }
+
+    fun setBackgroundMonitoring(enabled: Boolean) {
+        updateNotificationPrefs(enabled, null, null, null, null)
+    }
+
+    fun setNotifyQuotaWarning(enabled: Boolean) {
+        updateNotificationPrefs(null, enabled, null, null, null)
+    }
+
+    fun setNotifyNewSms(enabled: Boolean) {
+        updateNotificationPrefs(null, null, enabled, null, null)
+    }
+
+    fun setNotifyNewDevice(enabled: Boolean) {
+        updateNotificationPrefs(null, null, null, enabled, null)
+    }
+
+    fun setNotifyUnreachable(enabled: Boolean) {
+        updateNotificationPrefs(null, null, null, null, enabled)
     }
 
     fun loadWifiRadios() {

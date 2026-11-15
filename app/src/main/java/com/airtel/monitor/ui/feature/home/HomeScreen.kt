@@ -125,7 +125,8 @@ fun HomeScreen(
                 wan = state.wan,
                 history = state.history,
                 sparklineLabel = stringResource(R.string.home_throughput_sparkline_desc),
-                sparklineLegend = stringResource(R.string.home_speed_dl_ul)
+                sparklineLegend = stringResource(R.string.home_speed_dl_ul),
+                speedUnit = uiState.speedUnit
             )
         }
 

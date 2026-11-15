@@ -31,6 +31,7 @@ enum class ThemePreference { SYSTEM, LIGHT, DARK }
 enum class SpeedUnitPreference { MBPS, MBS }
 
 data class AppPreferencesSnapshot(
+    val isLoaded: Boolean = false,
     val routerHost: String = CredentialMigration.DEFAULT_HOST,
     val username: String = CredentialMigration.DEFAULT_USERNAME,
     val password: String = CredentialMigration.DEFAULT_PASSWORD,
@@ -38,7 +39,12 @@ data class AppPreferencesSnapshot(
     val themeMode: ThemePreference = ThemePreference.SYSTEM,
     val speedUnit: SpeedUnitPreference = SpeedUnitPreference.MBPS,
     val maskSensitive: Boolean = true,
-    val onboardingCompleted: Boolean = false
+    val onboardingCompleted: Boolean = false,
+    val backgroundMonitorEnabled: Boolean = false,
+    val notifyQuotaWarning: Boolean = true,
+    val notifyNewSms: Boolean = true,
+    val notifyNewDevice: Boolean = false,
+    val notifyUnreachable: Boolean = true
 )
 
 /**
@@ -114,6 +120,9 @@ class AppPreferencesRepository(
                         prefs[KEY_ENCRYPTED_PASSWORD] = migrated.encryptedPassword
                         prefs[KEY_HAS_SAVED_PASSWORD] = true
                         prefs[KEY_POLL_INTERVAL] = migrated.pollIntervalSeconds
+                        if (prefs[KEY_ONBOARDING_COMPLETED] == null) {
+                            prefs[KEY_ONBOARDING_COMPLETED] = true
+                        }
                     }
                     prefs[KEY_MIGRATED] = true
                 }
@@ -147,8 +156,14 @@ class AppPreferencesRepository(
             ?: SpeedUnitPreference.MBPS
         val mask = prefs[KEY_MASK_SENSITIVE] ?: true
         val onboarded = prefs[KEY_ONBOARDING_COMPLETED] ?: false
+        val bgMonitor = prefs[KEY_BG_MONITOR_ENABLED] ?: false
+        val notifyQuota = prefs[KEY_NOTIFY_QUOTA] ?: true
+        val notifySms = prefs[KEY_NOTIFY_SMS] ?: true
+        val notifyDevice = prefs[KEY_NOTIFY_DEVICE] ?: false
+        val notifyUnreachable = prefs[KEY_NOTIFY_UNREACHABLE] ?: true
 
         return AppPreferencesSnapshot(
+            isLoaded = true,
             routerHost = host,
             username = user,
             password = password,
@@ -156,7 +171,12 @@ class AppPreferencesRepository(
             themeMode = theme,
             speedUnit = unit,
             maskSensitive = mask,
-            onboardingCompleted = onboarded
+            onboardingCompleted = onboarded,
+            backgroundMonitorEnabled = bgMonitor,
+            notifyQuotaWarning = notifyQuota,
+            notifyNewSms = notifySms,
+            notifyNewDevice = notifyDevice,
+            notifyUnreachable = notifyUnreachable
         )
     }
 
@@ -206,7 +226,12 @@ class AppPreferencesRepository(
         themeMode: ThemePreference? = null,
         speedUnit: SpeedUnitPreference? = null,
         maskSensitive: Boolean? = null,
-        onboardingCompleted: Boolean? = null
+        onboardingCompleted: Boolean? = null,
+        backgroundMonitorEnabled: Boolean? = null,
+        notifyQuotaWarning: Boolean? = null,
+        notifyNewSms: Boolean? = null,
+        notifyNewDevice: Boolean? = null,
+        notifyUnreachable: Boolean? = null
     ) {
         val current = _preferences.value
         val next = current.copy(
@@ -217,7 +242,12 @@ class AppPreferencesRepository(
             themeMode = themeMode ?: current.themeMode,
             speedUnit = speedUnit ?: current.speedUnit,
             maskSensitive = maskSensitive ?: current.maskSensitive,
-            onboardingCompleted = onboardingCompleted ?: current.onboardingCompleted
+            onboardingCompleted = onboardingCompleted ?: current.onboardingCompleted,
+            backgroundMonitorEnabled = backgroundMonitorEnabled ?: current.backgroundMonitorEnabled,
+            notifyQuotaWarning = notifyQuotaWarning ?: current.notifyQuotaWarning,
+            notifyNewSms = notifyNewSms ?: current.notifyNewSms,
+            notifyNewDevice = notifyNewDevice ?: current.notifyNewDevice,
+            notifyUnreachable = notifyUnreachable ?: current.notifyUnreachable
         )
         _preferences.value = next
 
@@ -236,6 +266,11 @@ class AppPreferencesRepository(
                 if (speedUnit != null) prefs[KEY_SPEED_UNIT] = next.speedUnit.name
                 if (maskSensitive != null) prefs[KEY_MASK_SENSITIVE] = next.maskSensitive
                 if (onboardingCompleted != null) prefs[KEY_ONBOARDING_COMPLETED] = next.onboardingCompleted
+                if (backgroundMonitorEnabled != null) prefs[KEY_BG_MONITOR_ENABLED] = next.backgroundMonitorEnabled
+                if (notifyQuotaWarning != null) prefs[KEY_NOTIFY_QUOTA] = next.notifyQuotaWarning
+                if (notifyNewSms != null) prefs[KEY_NOTIFY_SMS] = next.notifyNewSms
+                if (notifyNewDevice != null) prefs[KEY_NOTIFY_DEVICE] = next.notifyNewDevice
+                if (notifyUnreachable != null) prefs[KEY_NOTIFY_UNREACHABLE] = next.notifyUnreachable
                 prefs[KEY_MIGRATED] = true
             }
         }
@@ -257,6 +292,11 @@ class AppPreferencesRepository(
         private val KEY_SPEED_UNIT = stringPreferencesKey("speed_unit")
         private val KEY_MASK_SENSITIVE = booleanPreferencesKey("mask_sensitive")
         private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        private val KEY_BG_MONITOR_ENABLED = booleanPreferencesKey("bg_monitor_enabled")
+        private val KEY_NOTIFY_QUOTA = booleanPreferencesKey("notify_quota_warning")
+        private val KEY_NOTIFY_SMS = booleanPreferencesKey("notify_new_sms")
+        private val KEY_NOTIFY_DEVICE = booleanPreferencesKey("notify_new_device")
+        private val KEY_NOTIFY_UNREACHABLE = booleanPreferencesKey("notify_unreachable")
         private val KEY_MIGRATED = booleanPreferencesKey("migrated_from_legacy_prefs")
     }
 }

@@ -405,4 +405,71 @@
     <string name="system_password_tier2_note">Updating the router password resets the active web session and saves the new password in this app.</string>
     <string name="system_password_submit">Update Password</string>
     <string name="reboot_confirm_token">REBOOT</string>
+
+    <string name="onboarding_title">Connect to Your Router</string>
+    <string name="onboarding_subtitle">Local-only monitoring for Airtel 5G Home ODU (ZLT X17M / W304VA PRO).</string>
+    <string name="onboarding_wifi_warning">You do not appear to be on Wi-Fi. Connect your phone to the router Wi-Fi network before testing.</string>
+    <string name="onboarding_gateway_hint_fmt">Detected Wi-Fi gateway: %1$s</string>
+    <string name="onboarding_host_label">Router Address (IP or host)</string>
+    <string name="onboarding_user_label">Router Username</string>
+    <string name="onboarding_pass_label">Router Password</string>
+    <string name="onboarding_test_btn">Test Connection</string>
+    <string name="onboarding_testing_btn">Testing…</string>
+    <string name="onboarding_save_continue">Save &amp; Continue</string>
+    <string name="onboarding_skip_btn">Skip for now</string>
+    <string name="onboarding_connected_fmt">Connected to %1$s</string>
+    <string name="onboarding_use_detected_gw">Use detected gateway</string>
+
+    <string name="settings_notifications_title">Background &amp; Alerts</string>
+    <string name="settings_notifications_subtitle">Checks every 15 min only while connected to your router Wi-Fi</string>
+    <string name="settings_bg_monitor_enable">Enable background monitoring</string>
+    <string name="settings_bg_monitor_desc">Runs every 15 min on router Wi-Fi to refresh widgets and check alerts</string>
+    <string name="settings_notify_quota">Data warning reached</string>
+    <string name="settings_notify_quota_desc">Alerts once per billing cycle after warning threshold</string>
+    <string name="settings_notify_sms">New unread SMS</string>
+    <string name="settings_notify_sms_desc">Alerts when unread router SIM messages increase</string>
+    <string name="settings_notify_device">New device joined (opt-in)</string>
+    <string name="settings_notify_device_desc">Alerts when an unseen client MAC connects</string>
+    <string name="settings_notify_unreachable">Router unreachable / recovered</string>
+    <string name="settings_notify_unreachable_desc">Alerts after 2 consecutive failed router checks</string>
+    <string name="settings_notif_permission_denied">Notification permission was declined. Background widget refreshes remain active without system alerts.</string>
+    <string name="settings_about_app_title">App &amp; Setup</string>
+    <string name="settings_setup_wizard_title">Run Setup Wizard</string>
+    <string name="settings_setup_wizard_subtitle">Re-detect Wi-Fi gateway and test router credentials</string>
+    <string name="settings_app_version_label">App Version</string>
+    <string name="settings_licenses_note">Built locally with AndroidX, Material 3 Expressive, OkHttp, and pure-Kotlin QR / OUI tools. No analytics or telemetry.</string>
+
+    <string name="notif_channel_quota_name">Data Usage Warnings</string>
+    <string name="notif_channel_quota_desc">Alerts when router monthly data crosses your warning percentage</string>
+    <string name="notif_channel_sms_name">Incoming Router SMS</string>
+    <string name="notif_channel_sms_desc">Alerts when new unread SMS arrive on the router SIM</string>
+    <string name="notif_channel_devices_name">New Connected Devices</string>
+    <string name="notif_channel_devices_desc">Opt-in alerts when an unfamiliar device joins the network</string>
+    <string name="notif_channel_conn_name">Router Reachability</string>
+    <string name="notif_channel_conn_desc">Alerts when the router stops responding or comes back online</string>
+
+    <string name="notif_quota_title">Router data warning reached</string>
+    <string name="notif_quota_body">Monthly usage reached %1$d%% (warning threshold %2$d%%).</string>
+    <string name="notif_sms_title">New router SMS</string>
+    <string name="notif_sms_body">Unread messages on router SIM: %1$d</string>
+    <string name="notif_device_title">New device connected</string>
+    <string name="notif_device_body">New client MAC detected (total new: %1$d, latest %2$s).</string>
+    <string name="notif_unreachable_title">Router unreachable</string>
+    <string name="notif_unreachable_body">Your Airtel ODU did not answer two consecutive background checks.</string>
+    <string name="notif_recovered_title">Router back online</string>
+    <string name="notif_recovered_body">Connection to your Airtel ODU has been restored.</string>
+
+    <string name="widget_compact_name">Router Status (Compact)</string>
+    <string name="widget_compact_desc">Network type, signal bars, data usage, and client count</string>
+    <string name="widget_expanded_name">Router Status (Expanded)</string>
+    <string name="widget_expanded_desc">Detailed cellular signal, today and monthly data, and devices</string>
+    <string name="widget_label_data">Data</string>
+    <string name="widget_label_today">Today</string>
+    <string name="widget_label_month">Month</string>
+    <string name="widget_label_devices">Devices</string>
+    <string name="widget_updated_fmt">Updated %1$s</string>
+    <string name="widget_offline">Offline / tap refresh</string>
+    <string name="widget_placeholder_dash">--</string>
+    <string name="widget_placeholder_zero">0</string>
+    <string name="cd_widget_refresh">Refresh router widget</string>
 </resources>

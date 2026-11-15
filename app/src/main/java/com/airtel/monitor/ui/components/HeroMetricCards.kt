@@ -19,6 +19,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airtel.monitor.core.datastore.SpeedUnitPreference
+import com.airtel.monitor.core.util.NetworkFormatters
 import com.airtel.monitor.data.model.BandwidthPoint
 import com.airtel.monitor.data.model.CellularMetrics
 import com.airtel.monitor.data.model.HardwareMetrics
@@ -32,7 +34,8 @@ fun MinimalWanSpeedCard(
     modifier: Modifier = Modifier,
     history: List<BandwidthPoint> = emptyList(),
     sparklineLabel: String? = null,
-    sparklineLegend: String? = null
+    sparklineLegend: String? = null,
+    speedUnit: SpeedUnitPreference = SpeedUnitPreference.MBPS
 ) {
     val dlProgress by animateFloatAsState(
         targetValue = (wan.downloadMbps / 100.0).toFloat().coerceIn(0.01f, 1f),
@@ -90,6 +93,7 @@ fun MinimalWanSpeedCard(
                     peakMbps = wan.peakDlMbps,
                     progress = dlProgress,
                     isDownload = true,
+                    speedUnit = speedUnit,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -109,6 +113,7 @@ fun MinimalWanSpeedCard(
                     peakMbps = wan.peakUlMbps,
                     progress = ulProgress,
                     isDownload = false,
+                    speedUnit = speedUnit,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -156,11 +161,14 @@ private fun SpeedMetricColumn(
     peakMbps: Double,
     progress: Float,
     isDownload: Boolean,
+    speedUnit: SpeedUnitPreference,
     modifier: Modifier = Modifier
 ) {
     val icon = if (isDownload) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward
     val activeColor = if (isDownload) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
     val containerColor = if (isDownload) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+    val (formattedSpeed, unitLabel) = NetworkFormatters.formatThroughput(speedMbps, speedUnit)
+    val peakText = NetworkFormatters.formatPeakThroughput(peakMbps, speedUnit)
 
     Column(
         modifier = modifier,
@@ -199,7 +207,7 @@ private fun SpeedMetricColumn(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = String.format("%.2f", speedMbps),
+                text = formattedSpeed,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
@@ -207,7 +215,7 @@ private fun SpeedMetricColumn(
                 lineHeight = 30.sp
             )
             Text(
-                text = "Mbps",
+                text = unitLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 2.dp)
@@ -234,7 +242,7 @@ private fun SpeedMetricColumn(
                 fontFamily = FontFamily.Monospace
             )
             Text(
-                text = "Peak ${String.format("%.1f", peakMbps)}M",
+                text = peakText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 fontFamily = FontFamily.Monospace

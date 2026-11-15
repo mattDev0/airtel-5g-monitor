@@ -1,9 +1,23 @@
 package com.airtel.monitor.core.util
 
+import com.airtel.monitor.core.datastore.SpeedUnitPreference
 import java.math.BigInteger
+import java.util.Locale
 import kotlin.math.roundToLong
 
 object NetworkFormatters {
+    fun formatThroughput(mbps: Double, unit: SpeedUnitPreference): Pair<String, String> =
+        when (unit) {
+            SpeedUnitPreference.MBPS -> String.format(Locale.US, "%.2f", mbps) to "Mbps"
+            SpeedUnitPreference.MBS -> String.format(Locale.US, "%.2f", mbps / 8.0) to "MB/s"
+        }
+
+    fun formatPeakThroughput(mbps: Double, unit: SpeedUnitPreference): String =
+        when (unit) {
+            SpeedUnitPreference.MBPS -> String.format(Locale.US, "Peak %.1fM", mbps)
+            SpeedUnitPreference.MBS -> String.format(Locale.US, "Peak %.2f MB/s", mbps / 8.0)
+        }
+
     fun isIpv4(value: String): Boolean {
         val parts = value.split(".")
         if (parts.size != 4) return false

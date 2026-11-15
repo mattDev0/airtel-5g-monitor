@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.airtel.monitor.R
 import com.airtel.monitor.core.di.AppContainer
+import com.airtel.monitor.core.network.GatewayDetector
 import com.airtel.monitor.data.model.ConnectionStatus
 import com.airtel.monitor.ui.components.GlassNavBar
 import com.airtel.monitor.ui.components.GlassNavBarHeight
@@ -68,6 +70,8 @@ import com.airtel.monitor.ui.feature.home.HomeScreen
 import com.airtel.monitor.ui.feature.home.HomeViewModel
 import com.airtel.monitor.ui.feature.messages.MessagesScreen
 import com.airtel.monitor.ui.feature.messages.MessagesViewModel
+import com.airtel.monitor.ui.feature.onboarding.OnboardingScreen
+import com.airtel.monitor.ui.feature.onboarding.OnboardingViewModel
 import com.airtel.monitor.ui.feature.security.SecurityScreen
 import com.airtel.monitor.ui.feature.security.SecurityViewModel
 import com.airtel.monitor.ui.feature.settings.SettingsHubScreen
@@ -87,6 +91,22 @@ fun AppShell(
     shellViewModel: ShellViewModel
 ) {
     val shellState by shellViewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    if (shellState.preferencesLoaded && !shellState.onboardingCompleted) {
+        val gatewayInfo = remember { GatewayDetector.detect(context) }
+        val onboardingVm: OnboardingViewModel = viewModel(
+            factory = OnboardingViewModel.factory(
+                container = container,
+                gatewayInfo = gatewayInfo,
+                onCompletedRefresh = shellViewModel::forceRefresh
+            )
+        )
+        OnboardingScreen(
+            viewModel = onboardingVm,
+            onFinished = { }
+        )
+        return
+    }
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val spacing = AirtelTheme.spacing
@@ -103,7 +123,8 @@ fun AppShell(
         currentDestination?.hasRoute(MessagesRoute::class) == true ||
         currentDestination?.hasRoute(DataUsageRoute::class) == true ||
         currentDestination?.hasRoute(SecurityRoute::class) == true ||
-        currentDestination?.hasRoute(SystemToolsRoute::class) == true
+        currentDestination?.hasRoute(SystemToolsRoute::class) == true ||
+        currentDestination?.hasRoute(OnboardingRoute::class) == true
     val selectedTab = when {
         currentDestination?.hasRoute(SignalRoute::class) == true -> TopLevelDestination.SIGNAL
         currentDestination?.hasRoute(DevicesRoute::class) == true -> TopLevelDestination.DEVICES
@@ -258,7 +279,22 @@ fun AppShell(
                                     onOpenMessages = { navController.navigate(MessagesRoute) { launchSingleTop = true } },
                                     onOpenDataUsage = { navController.navigate(DataUsageRoute) { launchSingleTop = true } },
                                     onOpenSecurity = { navController.navigate(SecurityRoute) { launchSingleTop = true } },
-                                    onOpenSystemTools = { navController.navigate(SystemToolsRoute) { launchSingleTop = true } }
+                                    onOpenSystemTools = { navController.navigate(SystemToolsRoute) { launchSingleTop = true } },
+                                    onOpenSetupWizard = { navController.navigate(OnboardingRoute) { launchSingleTop = true } }
+                                )
+                            }
+                            composable<OnboardingRoute> {
+                                val gatewayInfo = remember { GatewayDetector.detect(context) }
+                                val onboardingVm: OnboardingViewModel = viewModel(
+                                    factory = OnboardingViewModel.factory(
+                                        container = container,
+                                        gatewayInfo = gatewayInfo,
+                                        onCompletedRefresh = shellViewModel::forceRefresh
+                                    )
+                                )
+                                OnboardingScreen(
+                                    viewModel = onboardingVm,
+                                    onFinished = { navController.popBackStack() }
                                 )
                             }
                             composable<MessagesRoute> {
