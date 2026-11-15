@@ -11,7 +11,8 @@ import java.util.UUID
  */
 class RouterSession(
     private val settings: RouterSettings,
-    private val transport: RouterTransport
+    private val transport: RouterTransport,
+    private val onLoginSuccess: () -> Unit = {}
 ) {
     private val lock = Any()
     private var sessionId: String? = null
@@ -270,6 +271,7 @@ class RouterSession(
             val sid = loginJson.optString("sessionId")
             sessionId = sid.ifEmpty { newSessionId }
             accountLevel = loginJson.optString("level", "").ifBlank { null }
+            onLoginSuccess()
             RouterResult.Ok(Unit)
         } else {
             sessionId = null

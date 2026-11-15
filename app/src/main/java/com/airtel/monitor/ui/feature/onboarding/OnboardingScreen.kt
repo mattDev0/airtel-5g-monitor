@@ -3,11 +3,13 @@
 package com.airtel.monitor.ui.feature.onboarding
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,44 +74,49 @@ fun OnboardingScreen(
         viewModel.refreshGateway(GatewayDetector.detect(context))
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = spacing.xl, vertical = spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(spacing.lg)
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.md)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.xl, vertical = spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(spacing.lg)
         ) {
-            Surface(
-                shape = AirtelTheme.shapes.chip,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(48.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.md)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Router,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(10.dp)
-                )
+                Surface(
+                    shape = AirtelTheme.shapes.chip,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Router,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stringResource(R.string.onboarding_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = stringResource(R.string.onboarding_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(R.string.onboarding_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.onboarding_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
 
         if (!uiState.isWifiConnected) {
             Surface(
@@ -164,7 +171,7 @@ fun OnboardingScreen(
             }
         }
 
-        SectionCard(title = stringResource(R.string.onboarding_title)) {
+        SectionCard(title = stringResource(R.string.onboarding_credentials_title)) {
             OutlinedTextField(
                 value = uiState.routerHost,
                 onValueChange = viewModel::updateHost,
@@ -200,6 +207,45 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            FilledTonalButton(
+                onClick = viewModel::testConnection,
+                enabled = !uiState.isTesting,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (uiState.isTesting) {
+                    LoadingIndicator(modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(spacing.sm))
+                    Text(stringResource(R.string.onboarding_testing_btn))
+                } else {
+                    Text(stringResource(R.string.onboarding_test_btn))
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+            Button(
+                onClick = { viewModel.saveAndContinue(onFinished) },
+                enabled = !uiState.isTesting,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.onboarding_save_continue))
+            }
+            OutlinedButton(
+                onClick = { viewModel.skipForNow(onFinished) },
+                enabled = !uiState.isTesting,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.onboarding_skip_btn))
+            }
+        }
+
+        // Result feedback lives in a reserved slot below action buttons so buttons never shift during taps.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+            contentAlignment = Alignment.TopStart
+        ) {
             when (val status = uiState.testStatus) {
                 OnboardingTestStatus.Idle -> Unit
                 OnboardingTestStatus.Testing -> Unit
@@ -235,40 +281,8 @@ fun OnboardingScreen(
                     StatusFeedbackBanner(message = status.message)
                 }
             }
-
-            FilledTonalButton(
-                onClick = viewModel::testConnection,
-                enabled = !uiState.isTesting,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (uiState.isTesting) {
-                    LoadingIndicator(modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(spacing.sm))
-                    Text(stringResource(R.string.onboarding_testing_btn))
-                } else {
-                    Text(stringResource(R.string.onboarding_test_btn))
-                }
-            }
         }
-
-        Spacer(modifier = Modifier.weight(1f, fill = false))
-
-        Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-            Button(
-                onClick = { viewModel.saveAndContinue(onFinished) },
-                enabled = !uiState.isTesting,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.onboarding_save_continue))
-            }
-            OutlinedButton(
-                onClick = { viewModel.skipForNow(onFinished) },
-                enabled = !uiState.isTesting,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.onboarding_skip_btn))
-            }
-        }
+    }
     }
 }
 

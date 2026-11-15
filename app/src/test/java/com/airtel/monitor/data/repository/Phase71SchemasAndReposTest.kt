@@ -140,11 +140,17 @@ class Phase71SchemasAndReposTest {
         assertTrue(saveProfiles is RouterResult.Ok)
         assertEquals("airtelgprs.com", transport.posts(248).single().getJSONArray("apn_list").getJSONObject(0).getString("apnName"))
 
-        var traffic = JSONObject("""{"success":true,"limitSwitch":"0","limitSize":"0","flow_limit_unit":"1","startDate":"1","dl_mon_flow":"10","ul_mon_flow":"2"}""")
+        var traffic = JSONObject("""{"success":true,"limitSwitch":"0","limitSize":"0","flow_limit_unit":"1","startDate":"1","dl_mon_flow":"2","ul_mon_flow":"10"}""")
         transport.on(337, "GET") { traffic.toString() }
         transport.on(337, "POST") { req ->
             if (req.has("statisticsReset")) {
-                traffic.put("dl_mon_flow", req.getString("usedFlow"))
+                if (req.has("usedFlow")) {
+                    traffic.put("ul_mon_flow", req.getString("usedFlow"))
+                    traffic.put("dl_mon_flow", "0")
+                } else {
+                    traffic.put("ul_mon_flow", "0")
+                    traffic.put("dl_mon_flow", "0")
+                }
             } else {
                 traffic.put("limitSwitch", req.getString("limitSwitch"))
                 traffic.put("limitSize", req.getString("limitSize"))
@@ -154,9 +160,20 @@ class Phase71SchemasAndReposTest {
         }
         val quotaRes = mobileRepo.saveTrafficLimit(true, "500", "1", 5)
         assertTrue(quotaRes is RouterResult.Ok)
-        val calRes = mobileRepo.resetTrafficStatistics(12.5)
+        assertEquals(10.0, (quotaRes as RouterResult.Ok).data.dlMonthMb, 0.01)
+        assertEquals(2.0, quotaRes.data.ulMonthMb, 0.01)
+
+        val calRes = mobileRepo.calibrateTrafficStatistics(12.5)
         assertTrue(calRes is RouterResult.Ok)
-        assertEquals("12.5", transport.posts(337).last().getString("usedFlow"))
+        val calPost = transport.posts(337).last()
+        assertEquals("1", calPost.getString("statisticsReset"))
+        assertEquals("12.5", calPost.getString("usedFlow"))
+
+        val clearRes = mobileRepo.clearTrafficStatistics()
+        assertTrue(clearRes is RouterResult.Ok)
+        val clearPost = transport.posts(337).last()
+        assertEquals("1", clearPost.getString("statisticsReset"))
+        assertFalse(clearPost.has("usedFlow"))
     }
 
     @Test

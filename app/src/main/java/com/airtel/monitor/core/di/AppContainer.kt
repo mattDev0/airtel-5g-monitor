@@ -52,7 +52,16 @@ class AppContainer(application: Application) {
     val ouiVendorLookup = OuiVendorLookup.fromAsset(application)
 
     val transport: RouterTransport = OkHttpRouterTransport()
-    val routerSession = RouterSession(preferencesRepository, transport)
+    val routerSession = RouterSession(
+        settings = preferencesRepository,
+        transport = transport,
+        onLoginSuccess = {
+            val prefs = preferencesRepository.preferencesFlow.value
+            if (!prefs.onboardingCompleted && prefs.hasSavedPassword) {
+                preferencesRepository.updateSettings(onboardingCompleted = true)
+            }
+        }
+    )
     val settingsWriter = SettingsWriter(routerSession)
     val featureFlagRepository = FeatureFlagRepository(routerSession)
 

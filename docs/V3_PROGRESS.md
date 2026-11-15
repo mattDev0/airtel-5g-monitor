@@ -345,3 +345,34 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 
 ### Untested on Device / Live Router
 - End-to-end live ZLT X17M validation of all newly enabled Batch A–D write commands, `cmd 80` flag gating on physical hardware, USSD carrier session timing (`cmd 350`), WPS PIN/PBC pairing, and Tier-3 Factory Reset (`cmd 112`).
+
+---
+
+## Phase 7.2 — Review 2 Fixes
+
+### Completed
+1. **Onboarding skipped for upgrading installs & completed on login (`AppPreferencesRepository.kt`, `RouterSession.kt`, `AppContainer.kt`)**:
+   - Backfilled `onboarding_completed = true` when existing `migrated && has_saved_password` installs lack an explicit flag.
+   - Wired `RouterSession.onLoginSuccess` so migrated/saved-credential auto-login marks onboarding complete.
+2. **Onboarding visual contrast & card title (`OnboardingScreen.kt`)**:
+   - Wrapped `OnboardingScreen` in a full-bleed `Surface` using `MaterialTheme.colorScheme.background` and set explicit `onBackground` text color on the header; changed the card title to `"Router Credentials"`.
+3. **Onboarding non-jumping action buttons (`OnboardingScreen.kt`)**:
+   - Moved `testStatus` feedback below the `"Save & Continue"` / `"Skip for now"` buttons inside a fixed `heightIn(min = 56.dp)` container so button vertical alignment stays steady.
+4. **Data Usage headline totals, swapped split, and MB/GB/TB units (`Phase1Parsers.kt`, `UsageModels.kt`, `DataUsageScreen.kt`, `MobileRepository.kt`)**:
+   - Added `currentFlowMb` (`flow_dl + flow_ul` from `cmd 205` / `dash`) alongside `Monthly Traffic` (`mon_total_flow` / `usedMb`).
+   - Swapped `dlMonthMb` (`ul_mon_flow`) and `ulMonthMb` (`dl_mon_flow`) to match ZLT X17M live counters, marked the split secondary, and added `MB`/`GB`/`TB` (1024-step) formatting matching `js/info/sysInfo.js`.
+5. **Calibrate & Clear router statistics (`MobileRepository.kt`, `DataUsageViewModel.kt`, `DataUsageScreen.kt`, `ROUTER_API.md`, `strings.xml`)**:
+   - Split `cmd 337` write support into `calibrateTrafficStatistics(targetUsedMb)` (`{statisticsReset:"1", usedFlow:<mb>}`, Tier-3 confirm `"CALIBRATE"`) and `clearTrafficStatistics()` (`{statisticsReset:"1"}` omitting `usedFlow`, Tier-3 confirm `"CLEAR"`), distinct from clearing local phone history.
+6. **Home download progress bar artifact (`HeroMetricCards.kt`)**:
+   - Replaced `LinearWavyProgressIndicator` with flat `LinearProgressIndicator` (`StrokeCap.Round`, `gapSize = 0.dp`, `drawStopIndicator = {}`) clipped to `CircleShape`.
+7. **Preferred Network Mode summary (`SettingsHubViewModel.kt`)**:
+   - Hid the `5G mode:` clause unless a 5G mode is active, formatting `"5G mode: SA + NSA"` / `"SA"` / `"NSA"` when active.
+8. **SIM PIN change payload (`SimRepository.kt`, `ROUTER_API.md`)**:
+   - Removed unused `passwordChange` / `passwordConfirm` fields from `cmd 51` (`subcmd = "4"`), sending only `subcmd`, `enable`, `pin`, and `pinPasswordChange`.
+
+### Checks
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --console=plain`: passed (`103` unit tests across `18` suites, `0` failures, `0` errors, `0` skipped; `0` Kotlin warnings; `lintDebug` `0` errors/warnings with `26` unknown-severity SARIF entries; debug APK `29,118,888` bytes, R8 release APK `3,642,985` bytes).
+
+### Deferred / Untested on Hardware
+- Live ZLT X17M verification of the updated Phase 7.2 behaviors (`cmd 337` Calibrate vs Clear, `cmd 51 subcmd 4` PIN change, and upgrading-user onboarding skip).
+

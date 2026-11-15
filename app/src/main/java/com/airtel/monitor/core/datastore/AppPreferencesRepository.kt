@@ -39,6 +39,7 @@ data class AppPreferencesSnapshot(
     val themeMode: ThemePreference = ThemePreference.SYSTEM,
     val speedUnit: SpeedUnitPreference = SpeedUnitPreference.MBPS,
     val maskSensitive: Boolean = true,
+    val hasSavedPassword: Boolean = false,
     val onboardingCompleted: Boolean = false,
     val backgroundMonitorEnabled: Boolean = false,
     val notifyQuotaWarning: Boolean = true,
@@ -129,6 +130,18 @@ class AppPreferencesRepository(
                 }
             }
 
+            // Upgrading v3 users who already migrated credentials before KEY_ONBOARDING_COMPLETED existed
+            // should not be forced back through the first-run wizard.
+            val postMigrate = dataStore.data.first()
+            if (postMigrate[KEY_MIGRATED] == true &&
+                postMigrate[KEY_ONBOARDING_COMPLETED] == null &&
+                postMigrate[KEY_HAS_SAVED_PASSWORD] == true
+            ) {
+                dataStore.edit { prefs ->
+                    prefs[KEY_ONBOARDING_COMPLETED] = true
+                }
+            }
+
             val updated = dataStore.data.first()
             _preferences.value = decodeSnapshot(updated)
             initialized = true
@@ -156,6 +169,7 @@ class AppPreferencesRepository(
         val unit = prefs[KEY_SPEED_UNIT]?.let { runCatching { SpeedUnitPreference.valueOf(it) }.getOrNull() }
             ?: SpeedUnitPreference.MBPS
         val mask = prefs[KEY_MASK_SENSITIVE] ?: true
+        val savedPassword = prefs[KEY_HAS_SAVED_PASSWORD] == true
         val onboarded = prefs[KEY_ONBOARDING_COMPLETED] ?: false
         val bgMonitor = prefs[KEY_BG_MONITOR_ENABLED] ?: false
         val notifyQuota = prefs[KEY_NOTIFY_QUOTA] ?: true
@@ -174,6 +188,7 @@ class AppPreferencesRepository(
             themeMode = theme,
             speedUnit = unit,
             maskSensitive = mask,
+            hasSavedPassword = savedPassword,
             onboardingCompleted = onboarded,
             backgroundMonitorEnabled = bgMonitor,
             notifyQuotaWarning = notifyQuota,
@@ -247,6 +262,7 @@ class AppPreferencesRepository(
             themeMode = themeMode ?: current.themeMode,
             speedUnit = speedUnit ?: current.speedUnit,
             maskSensitive = maskSensitive ?: current.maskSensitive,
+            hasSavedPassword = current.hasSavedPassword || pass != null,
             onboardingCompleted = onboardingCompleted ?: current.onboardingCompleted,
             backgroundMonitorEnabled = backgroundMonitorEnabled ?: current.backgroundMonitorEnabled,
             notifyQuotaWarning = notifyQuotaWarning ?: current.notifyQuotaWarning,

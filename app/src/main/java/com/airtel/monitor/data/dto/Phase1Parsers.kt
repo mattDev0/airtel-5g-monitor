@@ -158,11 +158,22 @@ fun parseMonthlyUsage(
     todayDayOfMonth: Int? = null,
     daysInMonth: Int? = null
 ): MonthlyUsageSummary {
-    val dlMon = traffic337.optString("dl_mon_flow", "").trim().toDoubleOrNull()
-        ?: traffic337.optString("mon_download_flow", "").trim().toDoubleOrNull()
-    val ulMon = traffic337.optString("ul_mon_flow", "").trim().toDoubleOrNull()
+    val flowDl = net205.optString("flow_dl", "").trim().toDoubleOrNull()
+        ?: dash.optString("flow_dl", "").trim().toDoubleOrNull()
+    val flowUl = net205.optString("flow_ul", "").trim().toDoubleOrNull()
+        ?: dash.optString("flow_ul", "").trim().toDoubleOrNull()
+    val currentFlowMb = if (flowDl != null || flowUl != null) (flowDl ?: 0.0) + (flowUl ?: 0.0) else null
+
+    // On this ZLT X17M firmware, cmd 337's per-direction monthly fields are inverted vs traffic flow.
+    // Verified with two live samples ~40m apart:
+    // - flow_dl 7219.79 -> 12477.71 (+5258 MB) matched ul_mon_flow 159198.86 -> 164510.30 (+5311 MB)
+    // - flow_ul  220.92 ->   488.25 ( +267 MB) matched dl_mon_flow  15172.53 ->  15442.53 ( +270 MB)
+    // with dl_mon_flow + ul_mon_flow == mon_total_flow. Map download = ul_mon_flow and upload = dl_mon_flow.
+    val dlMon = traffic337.optString("ul_mon_flow", "").trim().toDoubleOrNull()
+    val ulMon = traffic337.optString("dl_mon_flow", "").trim().toDoubleOrNull()
     val totalFromStatus = net205.optString("mon_total_flow", "").trim().toDoubleOrNull()
         ?: dash.optString("mon_total_flow", "").trim().toDoubleOrNull()
+        ?: traffic337.optString("mon_download_flow", "").trim().toDoubleOrNull()
     val usedMb = totalFromStatus ?: if (dlMon != null || ulMon != null) (dlMon ?: 0.0) + (ulMon ?: 0.0) else null
 
     val limitSwitch = traffic337.optString("limitSwitch", "").trim() in listOf("1", "true", "True")
@@ -191,6 +202,7 @@ fun parseMonthlyUsage(
 
     return MonthlyUsageSummary(
         usedMb = usedMb,
+        currentFlowMb = currentFlowMb,
         dlMonthMb = dlMon,
         ulMonthMb = ulMon,
         limitEnabled = limitSwitch,
@@ -249,9 +261,10 @@ private fun formatDurationParts(days: Long, hours: Long, mins: Long, secs: Long)
 }
 
 fun formatDataSizeMb(mb: Double): String {
-    return if (mb >= 1024.0) {
-        String.format(Locale.US, "%.2f GB", mb / 1024.0)
-    } else {
-        String.format(Locale.US, "%.0f MB", mb)
+    val safe = mb.coerceAtLeast(0.0)
+    return when {
+        safe >= 1_048_576.0 -> String.format(Locale.US, "%.2f TB", safe / 1_048_576.0)
+        safe >= 1024.0 -> String.format(Locale.US, "%.2f GB", safe / 1024.0)
+        else -> String.format(Locale.US, "%.2f MB", safe)
     }
 }

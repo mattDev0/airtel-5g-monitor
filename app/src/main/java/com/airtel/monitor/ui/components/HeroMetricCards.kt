@@ -230,12 +230,18 @@ private fun SpeedMetricColumn(
             )
         }
 
-        // Live load bar: the Expressive wavy indicator ripples while traffic flows
-        LinearWavyProgressIndicator(
+        // Flat progress indicator avoids Expressive wavy left-edge arc artifacts near zero throughput
+        LinearProgressIndicator(
             progress = { progress },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .clip(CircleShape),
             color = activeColor,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            strokeCap = StrokeCap.Round,
+            gapSize = 0.dp,
+            drawStopIndicator = {}
         )
 
         // Subtext: kB/s & Peak (wraps cleanly at 200% font scale)

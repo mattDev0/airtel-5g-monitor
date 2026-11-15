@@ -492,8 +492,8 @@ class MobileRepository(
         )
     }
 
-    /** Resets or calibrates the monthly counter in MB (`cmd 337`, `statisticsReset = "1"`). */
-    suspend fun resetTrafficStatistics(targetUsedMb: Double = 0.0): RouterResult<TrafficLimitSettings> {
+    /** Calibrates the router's monthly traffic counter in MB (`cmd 337`, `statisticsReset = "1"`, `usedFlow`). */
+    suspend fun calibrateTrafficStatistics(targetUsedMb: Double): RouterResult<TrafficLimitSettings> {
         if (targetUsedMb < 0.0 || targetUsedMb.isNaN() || targetUsedMb.isInfinite()) {
             return RouterResult.BadResponse("Calibrated usage must be 0 or greater")
         }
@@ -502,18 +502,29 @@ class MobileRepository(
         } else {
             String.format(Locale.US, "%.2f", targetUsedMb).trimEnd('0').trimEnd('.')
         }
+        return postTrafficReset(usedFlowMbString = mbString)
+    }
+
+    /** Clears the router's monthly traffic statistical counter (`cmd 337`, `statisticsReset = "1"` only). */
+    suspend fun clearTrafficStatistics(): RouterResult<TrafficLimitSettings> =
+        postTrafficReset(usedFlowMbString = null)
+
+    private suspend fun postTrafficReset(usedFlowMbString: String?): RouterResult<TrafficLimitSettings> {
         return writer.write(
             WriteSpec(
                 cmd = 337,
                 readCmd = 337,
                 buildPayload = {
-                    mapOf(
-                        "statisticsReset" to "1",
-                        "usedFlow" to mbString
-                    )
+                    buildMap {
+                        put("statisticsReset", "1")
+                        if (usedFlowMbString != null) {
+                            put("usedFlow", usedFlowMbString)
+                        }
+                    }
                 },
                 verify = { readBack ->
-                    readBack.has("dl_mon_flow") || readBack.has("limitSwitch")
+                    readBack.has("mon_download_flow") || readBack.has("ul_mon_flow") ||
+                        readBack.has("dl_mon_flow") || readBack.has("limitSwitch")
                 },
                 parseResult = { readBack ->
                     statusRepository?.updateCachedTraffic337(readBack)
@@ -574,8 +585,9 @@ class MobileRepository(
             unitCode = unitCode,
             usesWordUnit = usesWord,
             startDate = json.optString("startDate", "1").trim().toIntOrNull()?.coerceIn(1, 28) ?: 1,
-            dlMonthMb = json.optString("dl_mon_flow", "0").trim().toDoubleOrNull() ?: 0.0,
-            ulMonthMb = json.optString("ul_mon_flow", "0").trim().toDoubleOrNull() ?: 0.0
+            // Router firmware swaps monthly DL/UL keys: ul_mon_flow tracks DL and dl_mon_flow tracks UL.
+            dlMonthMb = json.optString("ul_mon_flow", "0").trim().toDoubleOrNull() ?: 0.0,
+            ulMonthMb = json.optString("dl_mon_flow", "0").trim().toDoubleOrNull() ?: 0.0
         )
     }
 }

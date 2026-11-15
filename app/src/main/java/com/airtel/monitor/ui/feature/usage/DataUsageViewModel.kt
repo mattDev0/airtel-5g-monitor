@@ -36,6 +36,7 @@ data class DataUsageUiState(
     val isSaving: Boolean = false,
     val showQuotaSheet: Boolean = false,
     val showCalibrateSheet: Boolean = false,
+    val showClearRouterConfirm: Boolean = false,
     val statusMessage: String? = null
 )
 
@@ -77,6 +78,7 @@ class DataUsageViewModel internal constructor(
             isSaving = loc.isSaving,
             showQuotaSheet = loc.showQuotaSheet,
             showCalibrateSheet = loc.showCalibrateSheet,
+            showClearRouterConfirm = loc.showClearRouterConfirm,
             statusMessage = loc.statusMessage
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DataUsageUiState())
@@ -118,14 +120,18 @@ class DataUsageViewModel internal constructor(
     }
 
     fun openCalibrateSheet() {
-        local.update { it.copy(showCalibrateSheet = true, statusMessage = null) }
+        local.update { it.copy(showCalibrateSheet = true, showClearRouterConfirm = false, statusMessage = null) }
         if (mobileRepository?.trafficSettings?.value == null) {
             loadTrafficLimit()
         }
     }
 
+    fun openClearRouterConfirm() {
+        local.update { it.copy(showClearRouterConfirm = true, showCalibrateSheet = false, statusMessage = null) }
+    }
+
     fun dismissSheets() {
-        local.update { it.copy(showQuotaSheet = false, showCalibrateSheet = false) }
+        local.update { it.copy(showQuotaSheet = false, showCalibrateSheet = false, showClearRouterConfirm = false) }
     }
 
     fun saveTrafficLimit(
@@ -152,17 +158,13 @@ class DataUsageViewModel internal constructor(
         }
     }
 
-    fun resetTrafficStatistics(targetUsedMb: Double) {
+    fun calibrateTrafficStatistics(targetUsedMb: Double) {
         val repo = mobileRepository ?: return
         viewModelScope.launch(ioDispatcher) {
             local.update { it.copy(isSaving = true, statusMessage = null) }
-            when (val res = repo.resetTrafficStatistics(targetUsedMb)) {
+            when (val res = repo.calibrateTrafficStatistics(targetUsedMb)) {
                 is RouterResult.Ok -> {
-                    val msg = if (targetUsedMb == 0.0) {
-                        "Monthly usage counter reset"
-                    } else {
-                        "Monthly usage counter calibrated"
-                    }
+                    val msg = "Router monthly usage counter calibrated"
                     local.update { it.copy(isSaving = false, showCalibrateSheet = false, statusMessage = msg) }
                     emitStatusMessage(msg)
                     triggerRefresh(true)
@@ -175,11 +177,31 @@ class DataUsageViewModel internal constructor(
         }
     }
 
+    fun clearRouterTrafficStatistics() {
+        val repo = mobileRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(isSaving = true, statusMessage = null) }
+            when (val res = repo.clearTrafficStatistics()) {
+                is RouterResult.Ok -> {
+                    val msg = "Router monthly statistics cleared"
+                    local.update { it.copy(isSaving = false, showClearRouterConfirm = false, statusMessage = msg) }
+                    emitStatusMessage(msg)
+                    triggerRefresh(true)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(isSaving = false, showClearRouterConfirm = false, statusMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
     private data class LocalUsageState(
         val isLoading: Boolean = false,
         val isSaving: Boolean = false,
         val showQuotaSheet: Boolean = false,
         val showCalibrateSheet: Boolean = false,
+        val showClearRouterConfirm: Boolean = false,
         val statusMessage: String? = null
     )
 

@@ -2,6 +2,7 @@ package com.airtel.monitor.domain
 
 data class MonthlyUsageSummary(
     val usedMb: Double? = null,
+    val currentFlowMb: Double? = null,
     val dlMonthMb: Double? = null,
     val ulMonthMb: Double? = null,
     val limitEnabled: Boolean = false,

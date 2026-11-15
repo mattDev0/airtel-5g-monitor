@@ -129,8 +129,6 @@ class SimRepository(
                     "subcmd" to "4",
                     "enable" to "2",
                     "pin" to oldPin,
-                    "passwordChange" to newPin,
-                    "passwordConfirm" to newPin,
                     "pinPasswordChange" to newPin
                 )
             },

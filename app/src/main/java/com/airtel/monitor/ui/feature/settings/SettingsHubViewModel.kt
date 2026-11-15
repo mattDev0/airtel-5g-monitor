@@ -1257,11 +1257,16 @@ class SettingsHubViewModel internal constructor(
 
     private fun buildNetworkModeSummary(router: RouterState): String {
         val mode = router.cellular.networkType.ifBlank { router.networkModeInfo.networkMode }.ifBlank { "--" }
-        val nrMode = when (router.networkModeInfo.mode5g) {
-            "0" -> "SA + NSA"
-            "1" -> "SA"
-            "2" -> "NSA"
-            else -> ""
+        val is5gActive = mode.contains("5G", ignoreCase = true)
+        val nrMode = if (is5gActive) {
+            when (router.networkModeInfo.mode5g) {
+                "0" -> "5G mode: SA + NSA"
+                "1" -> "5G mode: SA"
+                "2" -> "5G mode: NSA"
+                else -> ""
+            }
+        } else {
+            ""
         }
         val ca = buildList {
             if (router.networkModeInfo.lteCa) add("LTE CA")

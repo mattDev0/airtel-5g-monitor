@@ -8,7 +8,9 @@ import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.network.RouterSettings
 import com.airtel.monitor.core.network.RouterTransport
 import com.airtel.monitor.core.network.SettingsWriter
+import com.airtel.monitor.data.dto.NetworkModeSnapshot
 import com.airtel.monitor.data.dto.encodeBase64Utf8
+import com.airtel.monitor.data.model.CellularMetrics
 import com.airtel.monitor.data.model.RouterState
 import com.airtel.monitor.data.repository.LanRepository
 import com.airtel.monitor.data.repository.MobileRepository
@@ -270,6 +272,16 @@ class WifiLanSimAndSettingsTest {
         val ok = simRepo.setPinLockEnabled(enable = true, pin = "1234") as RouterResult.Ok
         assertTrue(ok.data.pinLockEnabled)
         assertEquals("1", transport.sent(51, "POST").last().getString("subcmd"))
+
+        val changeRes = simRepo.changePin(oldPin = "1234", newPin = "5678")
+        assertTrue(changeRes is RouterResult.Ok)
+        val changePost = transport.sent(51, "POST").last()
+        assertEquals("4", changePost.getString("subcmd"))
+        assertEquals("2", changePost.getString("enable"))
+        assertEquals("1234", changePost.getString("pin"))
+        assertEquals("5678", changePost.getString("pinPasswordChange"))
+        assertFalse(changePost.has("passwordChange"))
+        assertFalse(changePost.has("passwordConfirm"))
     }
 
     @Test
@@ -297,6 +309,20 @@ class WifiLanSimAndSettingsTest {
         val updatedHosts = mutableListOf<String>()
         var refreshCount = 0
 
+        val routerFlow = MutableStateFlow(
+            RouterState(
+                cellular = CellularMetrics(networkType = "4G+"),
+                networkModeInfo = NetworkModeSnapshot(
+                    mobileDataOn = true,
+                    flightModeOn = false,
+                    networkMode = "1E",
+                    mode5g = "1",
+                    lteCa = true,
+                    nrCa = true
+                )
+            )
+        )
+
         val vm = SettingsHubViewModel(
             preferencesFlow = prefsFlow,
             storedPasswordProvider = { "admin" },
@@ -308,7 +334,7 @@ class WifiLanSimAndSettingsTest {
                 }
             },
             resetStatusState = {},
-            routerStateFlow = MutableStateFlow(RouterState()),
+            routerStateFlow = routerFlow,
             wifiRepository = WifiRepository(session, writer),
             lanRepository = LanRepository(session, writer),
             simRepository = SimRepository(session, writer),
@@ -341,6 +367,11 @@ class WifiLanSimAndSettingsTest {
         assertEquals(1, refreshCount)
         assertEquals(ThemePreference.SYSTEM, vm.uiState.value.themePreference)
         assertEquals(SpeedUnitPreference.MBPS, vm.uiState.value.speedUnitPreference)
+        assertEquals("4G+ · LTE CA · NR CA", vm.uiState.value.networkModeSummary)
+
+        routerFlow.value = routerFlow.value.copy(cellular = CellularMetrics(networkType = "5G NSA"))
+        val summary5g = vm.uiState.first { it.networkModeSummary.contains("5G mode:") }.networkModeSummary
+        assertEquals("5G NSA · 5G mode: SA · LTE CA · NR CA", summary5g)
         collector.cancel()
     }
 }

@@ -111,11 +111,32 @@ class Phase1ParsersTest {
         )
         assertTrue(summary.limitEnabled)
         assertEquals(264366.45, summary.usedMb!!, 0.01)
+        assertEquals(1420.50 + 312.25, summary.currentFlowMb!!, 0.01)
+        // ZLT X17M swaps monthly fields on cmd 337: ul_mon_flow = download, dl_mon_flow = upload
+        assertEquals(54366.45, summary.dlMonthMb!!, 0.01)
+        assertEquals(210000.0, summary.ulMonthMb!!, 0.01)
         assertEquals(500.0 * 1024.0, summary.limitMb!!, 0.01)
         assertEquals(10, summary.cycleStartDay)
         assertEquals(80, summary.warnPercentage)
         assertEquals(5, summary.daysLeftInCycle)
         assertFalse(summary.isOverWarning)
+
+        // Verify live router two-sample swap proof: flow_dl +5258 tracks ul_mon_flow +5311; flow_ul +267 tracks dl_mon_flow +270
+        val sampleA205 = JSONObject().put("flow_dl", "7219.79").put("flow_ul", "220.92").put("mon_total_flow", "174371.39")
+        val sampleA337 = JSONObject().put("ul_mon_flow", "159198.86").put("dl_mon_flow", "15172.53")
+        val sampleB205 = JSONObject().put("flow_dl", "12477.71").put("flow_ul", "488.25").put("mon_total_flow", "179952.83")
+        val sampleB337 = JSONObject().put("ul_mon_flow", "164510.30").put("dl_mon_flow", "15442.53")
+        val parsedA = parseMonthlyUsage(sampleA205, JSONObject(), sampleA337)
+        val parsedB = parseMonthlyUsage(sampleB205, JSONObject(), sampleB337)
+        assertEquals(7219.79 + 220.92, parsedA.currentFlowMb!!, 0.01)
+        assertEquals(12477.71 + 488.25, parsedB.currentFlowMb!!, 0.01)
+        assertEquals(5311.44, parsedB.dlMonthMb!! - parsedA.dlMonthMb!!, 0.01)
+        assertEquals(270.00, parsedB.ulMonthMb!! - parsedA.ulMonthMb!!, 0.01)
+
+        // Format units at 1024 steps (MB / GB / TB) matching js/info/sysInfo.js
+        assertEquals("512.00 MB", formatDataSizeMb(512.0))
+        assertEquals("2.00 GB", formatDataSizeMb(2048.0))
+        assertEquals("1.50 TB", formatDataSizeMb(1.5 * 1_048_576.0))
 
         val mbUnit = JSONObject(traffic337.toString())
             .put("flow_limit_unit", "MB")

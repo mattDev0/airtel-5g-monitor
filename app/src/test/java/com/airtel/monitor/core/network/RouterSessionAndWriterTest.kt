@@ -135,4 +135,19 @@ class RouterSessionAndWriterTest {
         assertTrue(res is RouterResult.Unreachable)
         assertEquals(1, transport.sent.count { it.getInt("cmd") == 300 && it.getString("method") == "POST" })
     }
+
+    @Test
+    fun `onLoginSuccess callback fires only after successful login`() {
+        var successCount = 0
+        val failTransport = FakeTransport().apply {
+            on(100, "POST") { """{"success":false,"message":"LOGIN_FAIL"}""" }
+        }
+        val failSession = RouterSession(settings, failTransport, onLoginSuccess = { successCount++ })
+        assertTrue(failSession.login() is RouterResult.NotLoggedIn)
+        assertEquals(0, successCount)
+
+        val okSession = RouterSession(settings, FakeTransport(), onLoginSuccess = { successCount++ })
+        assertTrue(okSession.login() is RouterResult.Ok)
+        assertEquals(1, successCount)
+    }
 }

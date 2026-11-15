@@ -175,14 +175,22 @@ fun DataUsageScreen(
                         horizontalArrangement = Arrangement.spacedBy(spacing.sm)
                     ) {
                         StatTile(
-                            label = stringResource(R.string.usage_dl_month_label),
-                            value = usage.dlMonthMb?.let(::formatDataSizeMb) ?: "--",
+                            label = stringResource(R.string.usage_monthly_traffic_label),
+                            value = usedText,
                             modifier = Modifier.weight(1f)
                         )
                         StatTile(
-                            label = stringResource(R.string.usage_ul_month_label),
-                            value = usage.ulMonthMb?.let(::formatDataSizeMb) ?: "--",
+                            label = stringResource(R.string.usage_current_traffic_label),
+                            value = usage.currentFlowMb?.let(::formatDataSizeMb) ?: "--",
                             modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (usage.dlMonthMb != null && usage.ulMonthMb != null) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        SettingValueRow(
+                            label = stringResource(R.string.usage_secondary_split_label),
+                            value = "↓ ${formatDataSizeMb(usage.dlMonthMb)} · ↑ ${formatDataSizeMb(usage.ulMonthMb)}"
                         )
                     }
 
@@ -246,6 +254,16 @@ fun DataUsageScreen(
                                     modifier = Modifier.padding(start = spacing.xs)
                                 )
                             }
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::openClearRouterConfirm,
+                            enabled = !uiState.isSaving,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.usage_clear_router_btn),
+                                color = colors.error
+                            )
                         }
                     }
 
@@ -351,7 +369,19 @@ fun DataUsageScreen(
             currentUsedMb = initialUsedMb,
             isSaving = uiState.isSaving,
             onDismiss = viewModel::dismissSheets,
-            onConfirmCalibrate = viewModel::resetTrafficStatistics
+            onConfirmCalibrate = viewModel::calibrateTrafficStatistics
+        )
+    }
+
+    if (uiState.showClearRouterConfirm) {
+        ConfirmSheet(
+            tier = ConfirmTier.DESTRUCTIVE,
+            title = stringResource(R.string.usage_clear_router_confirm_title),
+            impactMessage = stringResource(R.string.usage_clear_router_confirm_impact),
+            confirmLabel = stringResource(R.string.usage_clear_router_btn),
+            requiredConfirmationText = stringResource(R.string.usage_clear_confirm_token),
+            onConfirm = viewModel::clearRouterTrafficStatistics,
+            onDismiss = viewModel::dismissSheets
         )
     }
 }
@@ -635,10 +665,11 @@ private fun CalibrateUsageSheet(
 
     pendingMb?.let { (mb, pretty) ->
         ConfirmSheet(
-            tier = ConfirmTier.CONNECTIVITY,
+            tier = ConfirmTier.DESTRUCTIVE,
             title = stringResource(R.string.usage_calibrate_confirm_title),
             impactMessage = stringResource(R.string.usage_calibrate_confirm_impact, pretty),
-            confirmLabel = stringResource(R.string.action_continue),
+            confirmLabel = stringResource(R.string.usage_calibrate_btn),
+            requiredConfirmationText = stringResource(R.string.usage_calibrate_confirm_token),
             onConfirm = {
                 pendingMb = null
                 onConfirmCalibrate(mb)
