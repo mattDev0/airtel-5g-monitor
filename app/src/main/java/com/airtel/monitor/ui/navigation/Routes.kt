@@ -17,6 +17,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object AlignmentRoute
 @Serializable data object MessagesRoute
 @Serializable data object DataUsageRoute
+@Serializable data object SecurityRoute
+@Serializable data object SystemToolsRoute
 
 enum class TopLevelDestination(
     val route: Any,

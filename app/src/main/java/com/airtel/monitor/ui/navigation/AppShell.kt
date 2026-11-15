@@ -68,11 +68,15 @@ import com.airtel.monitor.ui.feature.home.HomeScreen
 import com.airtel.monitor.ui.feature.home.HomeViewModel
 import com.airtel.monitor.ui.feature.messages.MessagesScreen
 import com.airtel.monitor.ui.feature.messages.MessagesViewModel
+import com.airtel.monitor.ui.feature.security.SecurityScreen
+import com.airtel.monitor.ui.feature.security.SecurityViewModel
 import com.airtel.monitor.ui.feature.settings.SettingsHubScreen
 import com.airtel.monitor.ui.feature.settings.SettingsHubViewModel
 import com.airtel.monitor.ui.feature.signal.AlignmentScreen
 import com.airtel.monitor.ui.feature.signal.SignalScreen
 import com.airtel.monitor.ui.feature.signal.SignalViewModel
+import com.airtel.monitor.ui.feature.system.SystemToolsScreen
+import com.airtel.monitor.ui.feature.system.SystemToolsViewModel
 import com.airtel.monitor.ui.feature.usage.DataUsageScreen
 import com.airtel.monitor.ui.feature.usage.DataUsageViewModel
 import com.airtel.monitor.ui.theme.AirtelTheme
@@ -97,7 +101,9 @@ fun AppShell(
     val currentDestination = backStackEntry?.destination
     val isAlignmentFullScreen = currentDestination?.hasRoute(AlignmentRoute::class) == true ||
         currentDestination?.hasRoute(MessagesRoute::class) == true ||
-        currentDestination?.hasRoute(DataUsageRoute::class) == true
+        currentDestination?.hasRoute(DataUsageRoute::class) == true ||
+        currentDestination?.hasRoute(SecurityRoute::class) == true ||
+        currentDestination?.hasRoute(SystemToolsRoute::class) == true
     val selectedTab = when {
         currentDestination?.hasRoute(SignalRoute::class) == true -> TopLevelDestination.SIGNAL
         currentDestination?.hasRoute(DevicesRoute::class) == true -> TopLevelDestination.DEVICES
@@ -250,7 +256,9 @@ fun AppShell(
                                     viewModel = settingsVm,
                                     contentPadding = listContentPadding,
                                     onOpenMessages = { navController.navigate(MessagesRoute) { launchSingleTop = true } },
-                                    onOpenDataUsage = { navController.navigate(DataUsageRoute) { launchSingleTop = true } }
+                                    onOpenDataUsage = { navController.navigate(DataUsageRoute) { launchSingleTop = true } },
+                                    onOpenSecurity = { navController.navigate(SecurityRoute) { launchSingleTop = true } },
+                                    onOpenSystemTools = { navController.navigate(SystemToolsRoute) { launchSingleTop = true } }
                                 )
                             }
                             composable<MessagesRoute> {
@@ -264,6 +272,25 @@ fun AppShell(
                                 val usageVm: DataUsageViewModel = viewModel(factory = DataUsageViewModel.factory(container))
                                 DataUsageScreen(
                                     viewModel = usageVm,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable<SecurityRoute> {
+                                val securityVm: SecurityViewModel = viewModel(factory = SecurityViewModel.factory(container))
+                                SecurityScreen(
+                                    viewModel = securityVm,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable<SystemToolsRoute> {
+                                val systemVm: SystemToolsViewModel = viewModel(
+                                    factory = SystemToolsViewModel.factory(
+                                        container = container,
+                                        onForcePollRefresh = shellViewModel::forceRefresh
+                                    )
+                                )
+                                SystemToolsScreen(
+                                    viewModel = systemVm,
                                     onBack = { navController.popBackStack() }
                                 )
                             }
@@ -292,7 +319,8 @@ fun AppShell(
             confirmLabel = stringResource(R.string.reboot_confirm_button),
             onConfirm = shellViewModel::confirmReboot,
             onDismiss = shellViewModel::dismissRebootConfirm,
-            tier = ConfirmTier.CONNECTIVITY
+            tier = ConfirmTier.DESTRUCTIVE,
+            requiredConfirmationText = stringResource(R.string.reboot_confirm_token)
         )
     }
 }

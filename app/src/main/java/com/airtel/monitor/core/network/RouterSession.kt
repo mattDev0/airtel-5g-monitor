@@ -15,6 +15,7 @@ class RouterSession(
 ) {
     private val lock = Any()
     private var sessionId: String? = null
+    private var accountLevel: String? = null
 
     private val url: String
         get() = "http://${settings.routerHost}/cgi-bin/http.cgi"
@@ -22,10 +23,13 @@ class RouterSession(
     fun resetSession() {
         synchronized(lock) {
             sessionId = null
+            accountLevel = null
         }
     }
 
     fun currentSessionId(): String? = synchronized(lock) { sessionId }
+
+    fun currentAccountLevel(): String? = synchronized(lock) { accountLevel }
 
     fun login(): RouterResult<Unit> {
         synchronized(lock) {
@@ -265,9 +269,11 @@ class RouterSession(
         return if (success) {
             val sid = loginJson.optString("sessionId")
             sessionId = sid.ifEmpty { newSessionId }
+            accountLevel = loginJson.optString("level", "").ifBlank { null }
             RouterResult.Ok(Unit)
         } else {
             sessionId = null
+            accountLevel = null
             RouterResult.NotLoggedIn(msg.ifEmpty { "Incorrect router username or password" })
         }
     }

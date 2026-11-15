@@ -210,3 +210,35 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
   - USSD dialer (`cmd 350`: `html/manage/ussd.html/.js`)
   - Remote traffic limit / cycle write editor (`cmd 337` SET: `html/config/trafficLimit_settings.html/.js`)
   - Remote router daily/hourly stats tables (`cmd 405–408`: `html/industry/trafficStat.html/.js`; local snapshot tracking fills in daily usage history)
+
+---
+
+## Phase 5 — Security, System & Tools
+
+**Status:** Complete for verified Security (`cmd 367` firewall, `cmd 504` ALG switches), About Router (`cmd 207`/`133`/`113` with mask & tap-to-reveal), Device Self-Check (`cmd 264`), Router Time (`cmd 11`), Scheduled Reboot (`cmd 263`), System Logs (`cmd 322`/`17`), Change Admin Password (`cmd 102` with app credential sync), Tier-3 `REBOOT` confirmation, and user-triggered Cloudflare Speed Test (unit tests, lint, and debug APK verified; deferred second-hop sub-pages absent from `~/airtelOdu-webui/`)
+
+### Implemented
+- **Web UI Schemas & Validation (`docs/ROUTER_API.md`, `Phase5Models.kt`, `SensitiveFormatters.kt`):**
+  - Documented verified `POST` payloads for `cmd 17` (`SYS_LOG`), `cmd 102` (`CHANGE_PASSWD`), `cmd 263` (`TIME_TO_RESTART`), `cmd 322` (`LOG_INFO`), `cmd 367` (`FW_SWITCH_SETTING`), and `cmd 504` (`ALG_SETTING`) under `## Write schemas`, plus deferred uncaptured `secondMenuClick` pages (`dmz`, `upnp`, `ddos`, `portForward`, `ipFilter`, `urlFilter`, `timeSet`, `wanLinkDetect`, standalone `restoreFactory`).
+  - Implemented `SensitiveFormatters` (`maskIdentifier`, `validateRouterPassword` matching `js/index.js:validatePass`, `validateLogSizeKb`, `formatUptimeSeconds`).
+- **Session, Security, System & Speed Test Data Layer (`RouterSession.kt`, `SecurityRepository.kt`, `SystemRepository.kt`, `SpeedTestRunner.kt`, `AppContainer.kt`):**
+  - Extended `RouterSession` to record `accountLevel` from `cmd 100` login (`currentAccountLevel()`, reset on `resetSession()`).
+  - Implemented `SecurityRepository` with `SettingsWriter` verification for firewall (`cmd 367`) and 7 ALG flags (`cmd 504`).
+  - Extended `SystemRepository` with `loadAboutInfo` (`cmd 207` + `cmd 133`/`cmd 113`), `runSelfCheck` (`cmd 264`), `loadRouterTime` (`cmd 11`), `loadScheduledReboot` / `saveScheduledReboot` (`cmd 263`), `loadLogSettings` / `saveLogSettings` (`cmd 322`), `loadSysLog` / `clearSysLog` (`cmd 17`), and `changeAdminPassword` (`cmd 102`).
+  - Implemented `SpeedTestRunner` (ping latency, jitter, download/upload Mbps against `speed.cloudflare.com/__down` / `__up`, invoked only on explicit user Start).
+- **Security & System Tools UI (`SecurityViewModel.kt`, `SecurityScreen.kt`, `SystemToolsViewModel.kt`, `SystemToolsScreen.kt`, `SystemToolsSheets.kt`, `Routes.kt`, `SettingsHubScreen.kt`, `AppShell.kt`, `strings.xml`):**
+  - Added `SecurityRoute` and `SystemToolsRoute` sub-screens reachable from `SettingsHubScreen`.
+  - Built `SecurityScreen` with Tier-2 firewall-disable confirmation, protection level selector, and 7 ALG protocol toggles.
+  - Built `SystemToolsScreen` + `SystemToolsSheets` featuring About Router (masking sensitive IMEI/IMSI/ICCID/serial/MSISDN/EID/MAC identifiers with tap-to-reveal per field), on-demand `cmd 264` self-check, inline Cloudflare speed test card, Scheduled Reboot editor sheet, System Log viewer/level/clear sheet, `cmd 102` Password Change sheet (automatically syncing app password, resetting session, and triggering poll refresh on success), and Tier-3 `"REBOOT"` confirmation across System Tools and HeaderBar reboot.
+- **Tests:**
+  - Added `SecurityAndSystemTest.kt` (`4` tests covering `SensitiveFormatters`, `SecurityRepository` + `SecurityViewModel`, `SystemRepository` + `SystemToolsViewModel` incl. `cmd 207`/`17`/`263`/`322`/`102`, and offline `SpeedTestRunner` via OkHttp mock `Interceptor`).
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`82` unit tests across `15` test suites: `0` skipped, `0` failures, `0` errors; `lintDebug` passed with `0` errors and `37` SARIF entries (`0` new warnings); `assembleDebug` built `app-debug.apk`).
+
+### Untested on Device / Live Router
+- Live ZLT X17M `cmd 367` firewall, `cmd 504` ALG, `cmd 263` scheduled reboot, `cmd 322` / `cmd 17` syslog, `cmd 264` self-check, and `cmd 102` password change behavior.
+- Live Cloudflare speed test execution on device cellular/Wi-Fi WAN link (tested against mock OkHttp `Interceptor` offline).
+
+### Blocked / Deferred
+- Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/` (`dmz`, `upnp`, `ddos`, `portForward`, `ipFilter`, `urlFilter`, `timeSet`, `wanLinkDetect`, standalone `restoreFactory` `cmd 112`).

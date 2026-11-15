@@ -10,9 +10,11 @@ import com.airtel.monitor.core.util.OuiVendorLookup
 import com.airtel.monitor.data.local.AliasRepository
 import com.airtel.monitor.data.local.PreferencesRepository
 import com.airtel.monitor.data.local.SharedPreferencesDailyUsageStore
+import com.airtel.monitor.data.remote.SpeedTestRunner
 import com.airtel.monitor.data.repository.DeviceRepository
 import com.airtel.monitor.data.repository.LanRepository
 import com.airtel.monitor.data.repository.MobileRepository
+import com.airtel.monitor.data.repository.SecurityRepository
 import com.airtel.monitor.data.repository.SignalRepository
 import com.airtel.monitor.data.repository.SimRepository
 import com.airtel.monitor.data.repository.SmsRepository
@@ -55,7 +57,9 @@ class AppContainer(application: Application) {
         writer = settingsWriter,
         onUnreadCountSync = { count -> statusRepository.updateSmsUnreadCount(count) }
     )
-    val systemRepository = SystemRepository(routerSession)
+    val securityRepository = SecurityRepository(routerSession, settingsWriter)
+    val systemRepository = SystemRepository(routerSession, settingsWriter)
+    val speedTestRunner = SpeedTestRunner()
 
     val pollingCoordinator = PollingCoordinator(
         pollIntervalProvider = { (preferencesRepository.pollIntervalSeconds * 1000L).toLong().coerceAtLeast(500L) },
