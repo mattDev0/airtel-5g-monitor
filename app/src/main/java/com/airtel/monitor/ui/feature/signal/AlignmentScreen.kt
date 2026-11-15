@@ -2,7 +2,9 @@
 
 package com.airtel.monitor.ui.feature.signal
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,8 +34,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -47,6 +56,7 @@ import com.airtel.monitor.ui.designsystem.SectionCard
 import com.airtel.monitor.ui.theme.AirtelTheme
 import com.airtel.monitor.ui.theme.TabularMonospace
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
@@ -78,15 +88,27 @@ fun AlignmentScreen(
         }
     }
 
-    LaunchedEffect(snap?.timestampMs, uiState.alignmentSoundEnabled) {
-        val sample = snap ?: return@LaunchedEffect
-        val curSinr = sample.primarySinr
-        val topSinr = uiState.bestSinr
+    val soundEnabled by rememberUpdatedState(uiState.alignmentSoundEnabled)
+    val latestSnap by rememberUpdatedState(snap)
+    val latestBestSinr by rememberUpdatedState(uiState.bestSinr)
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            delay(250L)
+        }
+    }
+
+    LaunchedEffect(uiState.alignmentReadingSeq) {
+        if (uiState.alignmentReadingSeq <= 0) return@LaunchedEffect
+        val curSinr = latestSnap?.primarySinr
+        val topSinr = latestBestSinr
         val isNewBest = curSinr != null && topSinr != null && curSinr >= topSinr
         haptics.performHapticFeedback(
             if (isNewBest) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove
         )
-        if (uiState.alignmentSoundEnabled) {
+        if (soundEnabled) {
             withContext(Dispatchers.IO) {
                 AlignmentTonePlayer.playPip(curSinr)
             }
@@ -164,13 +186,67 @@ fun AlignmentScreen(
                 )
             }
 
+            val lastReadingAtMs = uiState.alignmentLastReadingAtMs
+            val elapsedMs = if (lastReadingAtMs > 0L) (nowMs - lastReadingAtMs).coerceAtLeast(0L) else 0L
+            val elapsedSec = (elapsedMs / 1000L).toInt()
+            val ringProgress by animateFloatAsState(
+                targetValue = if (lastReadingAtMs > 0L) (1f - (elapsedMs / 10_000f)).coerceIn(0f, 1f) else 0f,
+                label = "alignmentCadenceRing"
+            )
+
+            SectionCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(spacing.md)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            progress = { ringProgress },
+                            modifier = Modifier.size(44.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            strokeWidth = 4.dp,
+                            strokeCap = StrokeCap.Round
+                        )
+                        Text(
+                            text = if (lastReadingAtMs > 0L) "${elapsedSec}s" else "--",
+                            style = MaterialTheme.typography.labelSmall.merge(TabularMonospace),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = if (lastReadingAtMs > 0L) {
+                                stringResource(R.string.alignment_last_update_fmt, elapsedSec)
+                            } else {
+                                stringResource(R.string.alignment_waiting_reading)
+                            },
+                            style = MaterialTheme.typography.labelLarge.merge(TabularMonospace),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.alignment_cadence_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             AlignmentBigGaugeCard(
                 label = "SINR (${snap?.activeTechLabel ?: "Primary"})",
                 current = snap?.primarySinr,
                 unit = "dB",
                 best = uiState.bestSinr,
                 bestLabel = stringResource(R.string.alignment_best_sinr),
-                accentColor = colors.success
+                accentColor = colors.success,
+                alwaysOneDecimal = true
             )
 
             AlignmentBigGaugeCard(
@@ -179,7 +255,8 @@ fun AlignmentScreen(
                 unit = "dBm",
                 best = uiState.bestRsrp,
                 bestLabel = stringResource(R.string.alignment_best_rsrp),
-                accentColor = MaterialTheme.colorScheme.primary
+                accentColor = MaterialTheme.colorScheme.primary,
+                alwaysOneDecimal = false
             )
 
             if (snap?.rsrp5g != null && snap.rsrp4g != null) {
@@ -189,11 +266,11 @@ fun AlignmentScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "RSRP ${formatFloatMetric(snap.rsrp4g, "dBm")}",
+                            text = "RSRP ${formatFloatMetric(snap.rsrp4g, "dBm", alwaysOneDecimal = false)}",
                             style = MaterialTheme.typography.titleMedium.merge(TabularMonospace)
                         )
                         Text(
-                            text = "SINR ${formatFloatMetric(snap.sinr4g, "dB")}",
+                            text = "SINR ${formatFloatMetric(snap.sinr4g, "dB", alwaysOneDecimal = true)}",
                             style = MaterialTheme.typography.titleMedium.merge(TabularMonospace)
                         )
                     }
@@ -201,7 +278,7 @@ fun AlignmentScreen(
             }
 
             if (uiState.alignmentSinrHistory.size >= 2 || uiState.alignmentRsrpHistory.size >= 2) {
-                SectionCard(title = "Live Aiming Trend (30s)") {
+                SectionCard(title = stringResource(R.string.alignment_trend_title)) {
                     LineChart(
                         series = buildList {
                             if (uiState.alignmentSinrHistory.size >= 2) {
@@ -257,7 +334,8 @@ private fun AlignmentBigGaugeCard(
     unit: String,
     best: Float?,
     bestLabel: String,
-    accentColor: androidx.compose.ui.graphics.Color
+    accentColor: androidx.compose.ui.graphics.Color,
+    alwaysOneDecimal: Boolean
 ) {
     val spacing = AirtelTheme.spacing
     SectionCard {
@@ -276,7 +354,7 @@ private fun AlignmentBigGaugeCard(
                 color = MaterialTheme.colorScheme.surfaceContainerHighest
             ) {
                 Text(
-                    text = "$bestLabel: ${formatFloatMetric(best, unit)}",
+                    text = "$bestLabel: ${formatFloatMetric(best, unit, alwaysOneDecimal)}",
                     style = MaterialTheme.typography.labelMedium.merge(TabularMonospace),
                     fontWeight = FontWeight.SemiBold,
                     color = accentColor,
@@ -289,7 +367,7 @@ private fun AlignmentBigGaugeCard(
             horizontalArrangement = Arrangement.spacedBy(spacing.sm)
         ) {
             Text(
-                text = if (current != null) formatFloatNumber(current) else "--",
+                text = if (current != null) formatFloatNumber(current, alwaysOneDecimal) else "--",
                 style = MaterialTheme.typography.displayMedium.merge(TabularMonospace),
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold,
@@ -315,8 +393,8 @@ private fun AlignmentBigGaugeCard(
     }
 }
 
-private fun formatFloatNumber(value: Float): String =
-    if (value % 1f == 0f) value.toInt().toString() else String.format(Locale.US, "%.1f", value)
+private fun formatFloatNumber(value: Float, alwaysOneDecimal: Boolean = false): String =
+    if (!alwaysOneDecimal && value % 1f == 0f) value.toInt().toString() else String.format(Locale.US, "%.1f", value)
 
-private fun formatFloatMetric(value: Float?, unit: String): String =
-    if (value == null) "--" else "${formatFloatNumber(value)} $unit"
+private fun formatFloatMetric(value: Float?, unit: String, alwaysOneDecimal: Boolean = false): String =
+    if (value == null) "--" else "${formatFloatNumber(value, alwaysOneDecimal)} $unit"

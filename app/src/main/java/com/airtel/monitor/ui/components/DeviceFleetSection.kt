@@ -317,7 +317,7 @@ private fun MinimalDeviceItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
-                    maxLines = 1
+                    maxLines = 2
                 )
             }
 

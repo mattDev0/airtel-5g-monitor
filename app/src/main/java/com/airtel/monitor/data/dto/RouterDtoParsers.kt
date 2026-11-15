@@ -130,25 +130,56 @@ fun parseWifiRadioConfig(res24: JSONObject, res5: JSONObject): WifiRadioConfig =
     channel5g = res5.optString("wifi5Channel", "")
 )
 
+/**
+ * Maps router `signal_lvl` (0..5 scale used by `js/main.js` StatusUtil.formatSingalLevel)
+ * onto a 0..5 bar count, preferring cmd 205 / 394 over older status fields.
+ */
+fun parseSignalBarsLevel(
+    net205: JSONObject = JSONObject(),
+    statusBar394: JSONObject = JSONObject(),
+    dash: JSONObject = JSONObject(),
+    sysStatus: JSONObject = JSONObject(),
+    networkType: String = ""
+): Int {
+    val rawLvl = listOf(net205, statusBar394, dash, sysStatus).firstNotNullOfOrNull { src ->
+        val raw = src.optString("signal_lvl", "").trim()
+        if (raw.isEmpty() || raw.equals("null", ignoreCase = true)) null else raw.toIntOrNull()
+    }
+    val registered = networkType.isNotEmpty() && networkType != "-"
+    return when {
+        rawLvl == null || rawLvl < 0 || rawLvl > 5 -> if (registered) 1 else 0
+        rawLvl == 0 -> if (registered) 1 else 0
+        else -> rawLvl.coerceIn(0, 5)
+    }
+}
+
 fun parseCellularMetrics(
     sysStatus: JSONObject,
     dash: JSONObject,
     net205: JSONObject = JSONObject(),
     latestChart: JSONObject = JSONObject(),
-    routerInfo133: JSONObject = JSONObject()
+    routerInfo133: JSONObject = JSONObject(),
+    statusBar394: JSONObject = JSONObject()
 ): CellularMetrics {
     fun pick(vararg values: String): String =
         values.map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.equals("null", ignoreCase = true) && it != "-" } ?: "-"
 
     val netType = pick(
-        sysStatus.optString("network_type_str"),
         net205.optString("network_type_str"),
+        statusBar394.optString("network_type_str"),
+        sysStatus.optString("network_type_str"),
         dash.optString("network_type_str"),
         routerInfo133.optString("network_type_str")
     )
     return CellularMetrics(
         networkType = netType,
-        signalLvl = sysStatus.optInt("signal_lvl", dash.optInt("signal_lvl", net205.optInt("signal_lvl", 0))),
+        signalLvl = parseSignalBarsLevel(
+            net205 = net205,
+            statusBar394 = statusBar394,
+            dash = dash,
+            sysStatus = sysStatus,
+            networkType = netType
+        ),
         rsrp5g = pick(net205.optString("RSRP_5G"), routerInfo133.optString("RSRP_5G"), latestChart.optString("rsrp_5g"), dash.optString("RSRP_5G")),
         sinr5g = pick(net205.optString("SINR_5G"), routerInfo133.optString("SINR_5G"), latestChart.optString("sinr_5g")),
         rsrp4g = pick(net205.optString("RSRP"), routerInfo133.optString("RSRP"), latestChart.optString("rsrp_4g"), dash.optString("RSRP")),

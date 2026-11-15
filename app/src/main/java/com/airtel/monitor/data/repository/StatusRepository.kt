@@ -83,6 +83,7 @@ class StatusRepository(
     private var cachedRouterInfo133: JSONObject = JSONObject()
     private var cachedDeviceInfo207: JSONObject = JSONObject()
     private var cachedTraffic337: JSONObject = JSONObject()
+    private var cachedStatusBar394: JSONObject = JSONObject()
 
     var peakDlMbps: Double = 0.0
         private set
@@ -102,6 +103,7 @@ class StatusRepository(
         cachedRouterInfo133 = JSONObject()
         cachedDeviceInfo207 = JSONObject()
         cachedTraffic337 = JSONObject()
+        cachedStatusBar394 = JSONObject()
         history.clear()
         liveSignalPoints.clear()
         baselineHistory1018 = emptyList()
@@ -178,7 +180,14 @@ class StatusRepository(
 
         val devices = parseDevices(dhcp, dash, wifi5g, wifi24g, aliasLookup)
         val routerInfo133 = cachedRouterInfo133
-        val cellular = parseCellularMetrics(sysStatus, dash, net205, latestChart, routerInfo133)
+        val cellular = parseCellularMetrics(
+            sysStatus = sysStatus,
+            dash = dash,
+            net205 = net205,
+            latestChart = latestChart,
+            routerInfo133 = routerInfo133,
+            statusBar394 = cachedStatusBar394
+        )
 
         val carriersFrom205 = parseCarriers(net205)
         val carriersFrom160 = parseCarriers(cachedCell160)
@@ -308,7 +317,7 @@ class StatusRepository(
         return RouterResult.Ok(state)
     }
 
-    /** Alignment mode polls ONLY cmd 205 at 1s interval. */
+    /** Alignment mode polls ONLY cmd 205 at 2s interval. */
     fun pollAlignment(): RouterResult<JSONObject> {
         val nowMs = clock()
         val res = session.execute(205)
@@ -409,6 +418,7 @@ class StatusRepository(
         }
 
         session.execute(394).getOrNull()?.let { bar ->
+            cachedStatusBar394 = bar
             _smsUnreadCount.value = parseSmsUnreadCount(bar)
         }
     }

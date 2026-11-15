@@ -11,6 +11,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,17 +19,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AirplanemodeActive
 import androidx.compose.material.icons.rounded.CellTower
-import androidx.compose.material.icons.rounded.DataUsage
 import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,7 +59,6 @@ import com.airtel.monitor.ui.designsystem.ConfirmTier
 import com.airtel.monitor.ui.designsystem.SectionCard
 import com.airtel.monitor.ui.designsystem.SettingSwitchRow
 import com.airtel.monitor.ui.designsystem.SignalBars
-import com.airtel.monitor.ui.designsystem.Sparkline
 import com.airtel.monitor.ui.designsystem.StatTile
 import com.airtel.monitor.ui.theme.AirtelTheme
 import com.airtel.monitor.ui.theme.TabularMonospace
@@ -118,22 +120,12 @@ fun HomeScreen(
         }
 
         item(key = "live_throughput") {
-            Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                MinimalWanSpeedCard(wan = state.wan)
-                if (state.history.size >= 2) {
-                    SectionCard(
-                        title = stringResource(R.string.home_throughput_title),
-                        subtitle = stringResource(R.string.home_throughput_sparkline_desc)
-                    ) {
-                        Sparkline(
-                            values = state.history.map { it.downloadMbps.toFloat() },
-                            lineColor = colors.downloadSeries,
-                            secondaryValues = state.history.map { it.uploadMbps.toFloat() },
-                            secondaryColor = colors.uploadSeries
-                        )
-                    }
-                }
-            }
+            MinimalWanSpeedCard(
+                wan = state.wan,
+                history = state.history,
+                sparklineLabel = stringResource(R.string.home_throughput_sparkline_desc),
+                sparklineLegend = stringResource(R.string.home_speed_dl_ul)
+            )
         }
 
         item(key = "data_usage") {
@@ -359,7 +351,7 @@ private fun ConnectionHeroCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            SignalBars(level = state.cellular.signalLvl)
+            SignalBars(level = state.cellular.signalLvl, maxBars = 5)
         }
 
         Surface(
@@ -392,8 +384,8 @@ private fun ConnectionHeroCard(
                 modifier = Modifier.weight(1f, fill = true)
             )
             StatTile(
-                label = "PCI",
-                value = cellPill,
+                label = stringResource(R.string.home_cell_tile),
+                value = cellPill.removePrefix("PCI ").trim(),
                 onClick = onOpenSignal,
                 modifier = Modifier.weight(1f, fill = true)
             )
@@ -407,25 +399,41 @@ private fun MonthlyDataUsageCard(
     onClick: () -> Unit
 ) {
     val usage = state.monthlyUsage
-    val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
     val usedText = usage.usedMb?.let(::formatDataSizeMb) ?: "--"
     val limitText = usage.limitMb?.let(::formatDataSizeMb)
+    val progress = usage.progressFraction
+    val hasLimit = usage.limitEnabled && progress != null
 
     SectionCard(
         title = stringResource(R.string.home_usage_title),
-        trailing = {
-            androidx.compose.material3.Icon(
-                imageVector = Icons.Rounded.DataUsage,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
+        trailing = if (hasLimit) {
+            {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(40.dp),
+                        color = if (usage.isOverWarning) colors.warning else MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        strokeWidth = 3.5.dp,
+                        strokeCap = StrokeCap.Round
+                    )
+                    Text(
+                        text = "${(progress * 100f).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall.merge(TabularMonospace),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        } else {
+            null
         },
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
     ) {
-        val primaryLine = if (usage.limitEnabled && limitText != null) {
+        val primaryLine = if (hasLimit && limitText != null) {
             stringResource(R.string.home_usage_limit_fmt, usedText, limitText)
         } else {
             stringResource(R.string.home_usage_used_fmt, usedText)
@@ -437,33 +445,37 @@ private fun MonthlyDataUsageCard(
             color = MaterialTheme.colorScheme.onSurface
         )
 
-        val progress = usage.progressFraction
-        if (usage.limitEnabled && progress != null) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-                color = if (usage.isOverWarning) colors.warning else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                strokeCap = StrokeCap.Round
-            )
-        }
-
         val subtitleParts = buildList {
-            if (usage.limitEnabled && usage.daysLeftInCycle != null) {
+            if (hasLimit && usage.daysLeftInCycle != null) {
                 add(stringResource(R.string.home_usage_days_left_fmt, usage.daysLeftInCycle))
-            } else if (!usage.limitEnabled) {
+            } else if (!hasLimit) {
                 add(stringResource(R.string.home_usage_no_limit))
             }
             if (usage.cycleStartDay != null) {
                 add(stringResource(R.string.home_usage_cycle_day_fmt, usage.cycleStartDay))
             }
         }
-        if (subtitleParts.isNotEmpty()) {
-            Text(
-                text = subtitleParts.joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (subtitleParts.isNotEmpty() || !hasLimit) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = subtitleParts.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!hasLimit) {
+                    TextButton(
+                        onClick = onClick,
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        Text(stringResource(R.string.home_usage_set_limit))
+                    }
+                }
+            }
         }
     }
 }

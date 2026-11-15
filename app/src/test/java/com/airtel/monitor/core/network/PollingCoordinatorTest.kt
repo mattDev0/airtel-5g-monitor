@@ -25,40 +25,46 @@ class PollingCoordinatorTest {
             attachProcessLifecycle = false
         )
 
-        // Starts paused until foreground
-        runCurrent()
-        assertEquals(0, normalTicks)
+        try {
+            // Starts paused until foreground
+            runCurrent()
+            assertEquals(0, normalTicks)
 
-        coordinator.onForegroundChanged(true)
-        runCurrent()
-        assertEquals(1, normalTicks)
+            coordinator.onForegroundChanged(true)
+            runCurrent()
+            assertEquals(1, normalTicks)
 
-        advanceTimeBy(2000L)
-        runCurrent()
-        assertEquals(2, normalTicks)
+            advanceTimeBy(2000L)
+            runCurrent()
+            assertEquals(2, normalTicks)
 
-        // User pause stops ticks
-        coordinator.setPaused(true)
-        advanceTimeBy(4000L)
-        runCurrent()
-        assertEquals(2, normalTicks)
+            // User pause stops ticks
+            coordinator.setPaused(true)
+            advanceTimeBy(4000L)
+            runCurrent()
+            assertEquals(2, normalTicks)
 
-        // Resume + switch to alignment mode (1s ticks)
-        coordinator.setPaused(false)
-        coordinator.setMode(PollingMode.ALIGNMENT)
-        runCurrent()
-        assertEquals(1, alignmentTicks)
+            // Resume + switch to alignment mode (2s ticks)
+            coordinator.setPaused(false)
+            coordinator.setMode(PollingMode.ALIGNMENT)
+            runCurrent()
+            assertEquals(1, alignmentTicks)
 
-        advanceTimeBy(1000L)
-        runCurrent()
-        assertEquals(2, alignmentTicks)
+            advanceTimeBy(1000L)
+            runCurrent()
+            assertEquals(1, alignmentTicks)
 
-        // Background stops alignment mode too
-        coordinator.onForegroundChanged(false)
-        advanceTimeBy(5000L)
-        runCurrent()
-        assertEquals(2, alignmentTicks)
+            advanceTimeBy(1000L)
+            runCurrent()
+            assertEquals(2, alignmentTicks)
 
-        coordinator.shutdown()
+            // Background stops alignment mode too
+            coordinator.onForegroundChanged(false)
+            advanceTimeBy(5000L)
+            runCurrent()
+            assertEquals(2, alignmentTicks)
+        } finally {
+            coordinator.shutdown()
+        }
     }
 }

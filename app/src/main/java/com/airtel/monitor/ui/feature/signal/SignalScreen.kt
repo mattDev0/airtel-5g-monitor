@@ -120,7 +120,6 @@ fun SignalScreen(
         item(key = "alignment_and_carriers") {
             SectionCard(
                 title = stringResource(R.string.signal_carriers_title),
-                subtitle = caSummary,
                 trailing = {
                     if (caSummary != null) {
                         Surface(

@@ -1,7 +1,9 @@
 package com.airtel.monitor.data.dto
 
+import com.airtel.monitor.domain.AlignmentSnapshot
 import com.airtel.monitor.domain.CarrierTech
 import com.airtel.monitor.ui.feature.signal.AlignmentTonePlayer
+import com.airtel.monitor.ui.feature.signal.hasAlignmentValuesChanged
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -127,13 +129,43 @@ class Phase1ParsersTest {
 
     @Test
     fun `formats router durations and alignment pitch rises with SINR`() {
-        assertEquals("3h 57m", formatDurationText("14230"))
-        assertEquals("2d 0h 0m", formatDurationText("172800"))
-        assertEquals("45s", formatDurationText("45"))
-        assertEquals("1d 1h 5m", formatDurationText("25:05:10"))
+        assertEquals("3 h 57 m", formatDurationText("14230"))
+        assertEquals("2 d 0 h", formatDurationText("172800"))
+        assertEquals("45 s", formatDurationText("45"))
+        assertEquals("1 d 1 h", formatDurationText("25:05:10"))
+        assertEquals("1 h 19 m", formatDurationText("0-1-19-52"))
+        assertEquals("2 d 4 h", formatDurationText("2-4-10-30"))
 
         val lowFreq = AlignmentTonePlayer.sinrToFrequencyHz(-2f)
         val highFreq = AlignmentTonePlayer.sinrToFrequencyHz(24f)
         assertTrue(highFreq > lowFreq)
+    }
+
+    @Test
+    fun `maps webui signal scale preferring 205 and 394 over stale 113`() {
+        val stale113 = JSONObject().put("signal_lvl", 2)
+        val live205 = JSONObject().put("signal_lvl", 3)
+        val bar394 = JSONObject().put("signal_lvl", 3)
+        assertEquals(3, parseSignalBarsLevel(net205 = live205, statusBar394 = bar394, sysStatus = stale113, networkType = "4G+"))
+        assertEquals(1, parseSignalBarsLevel(net205 = JSONObject().put("signal_lvl", 0), networkType = "4G"))
+        assertEquals(0, parseSignalBarsLevel(net205 = JSONObject().put("signal_lvl", 0), networkType = "-"))
+        assertEquals(5, parseSignalBarsLevel(net205 = JSONObject().put("signal_lvl", 5), networkType = "5G"))
+    }
+
+    @Test
+    fun `alignment change detector ignores identical 2s polls`() {
+        val base = AlignmentSnapshot(
+            networkType = "4G+",
+            carrierSummary = "B7 + B1 · 25 MHz",
+            rsrp5g = null,
+            sinr5g = null,
+            rsrp4g = -84f,
+            sinr4g = -2.0f,
+            timestampMs = 1000L
+        )
+        assertTrue(hasAlignmentValuesChanged(null, base))
+        assertFalse(hasAlignmentValuesChanged(base, base.copy(timestampMs = 3000L)))
+        assertTrue(hasAlignmentValuesChanged(base, base.copy(sinr4g = -1.0f, timestampMs = 11000L)))
+        assertTrue(hasAlignmentValuesChanged(base, base.copy(rsrp4g = -82f, timestampMs = 11000L)))
     }
 }

@@ -66,13 +66,15 @@
     <!-- Home screen (Phase 1) -->
     <string name="home_online_duration">Online</string>
     <string name="home_wan_ip">WAN IP</string>
-    <string name="home_throughput_title">Live Throughput</string>
-    <string name="home_throughput_sparkline_desc">60-second download and upload history</string>
+    <string name="home_cell_tile">Cell</string>
+    <string name="home_throughput_sparkline_desc">60 s history</string>
+    <string name="home_speed_dl_ul">DL / UL</string>
     <string name="home_usage_title">Monthly Data Usage</string>
     <string name="home_usage_used_fmt">%1$s used</string>
     <string name="home_usage_limit_fmt">%1$s / %2$s limit</string>
     <string name="home_usage_days_left_fmt">%1$d days left in cycle</string>
     <string name="home_usage_no_limit">No monthly limit configured</string>
+    <string name="home_usage_set_limit">Set a limit</string>
     <string name="home_usage_cycle_day_fmt">Cycle starts day %1$d</string>
     <string name="home_usage_tap_hint">Monthly usage details and limits are scheduled for Phase 4</string>
     <string name="home_toggles_title">Quick Controls</string>
@@ -118,7 +120,11 @@
     <string name="signal_radio_mode_title">Radio Mode &amp; Carrier Aggregation</string>
     <string name="signal_radio_mode_readonly_note">Read-only from cmd 218 (mode/CA switching awaits router web UI write schema)</string>
     <string name="alignment_title">Antenna Alignment</string>
-    <string name="alignment_subtitle">Polling cmd 205 every 1s · Keep screen on</string>
+    <string name="alignment_subtitle">Live · updates every 2 s · Keep screen on</string>
+    <string name="alignment_cadence_hint">The router refreshes signal about every 10 s. Move the antenna a little, then wait for the next reading.</string>
+    <string name="alignment_last_update_fmt">Last update %1$d s ago</string>
+    <string name="alignment_waiting_reading">Waiting for reading…</string>
+    <string name="alignment_trend_title">Aiming Trend (per reading)</string>
     <string name="alignment_best_sinr">Best SINR</string>
     <string name="alignment_best_rsrp">Best RSRP</string>
     <string name="alignment_reset_best">Reset best</string>

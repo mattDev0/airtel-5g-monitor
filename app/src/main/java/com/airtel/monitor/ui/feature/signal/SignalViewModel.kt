@@ -42,16 +42,29 @@ data class SignalUiState(
     val bestSinr: Float? = null,
     val bestRsrp: Float? = null,
     val alignmentSinrHistory: List<Float> = emptyList(),
-    val alignmentRsrpHistory: List<Float> = emptyList()
+    val alignmentRsrpHistory: List<Float> = emptyList(),
+    val alignmentLastReadingAtMs: Long = 0L,
+    val alignmentReadingSeq: Int = 0
 )
 
+internal fun hasAlignmentValuesChanged(prev: AlignmentSnapshot?, next: AlignmentSnapshot): Boolean {
+    if (next.primaryRsrp == null && next.primarySinr == null) return false
+    if (prev == null) return true
+    return prev.rsrp5g != next.rsrp5g ||
+        prev.sinr5g != next.sinr5g ||
+        prev.rsrp4g != next.rsrp4g ||
+        prev.sinr4g != next.sinr4g
+}
+
 class SignalViewModel(
-    private val container: AppContainer
+    private val container: AppContainer,
+    private val clock: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalSignalState())
     private var initialNeighborsLoaded = false
     private var alignmentActive = false
+    private var lastReadingSnapshot: AlignmentSnapshot? = null
 
     val uiState: StateFlow<SignalUiState> = combine(
         container.statusRepository.routerState,
@@ -86,7 +99,9 @@ class SignalViewModel(
             bestSinr = loc.bestSinr,
             bestRsrp = loc.bestRsrp,
             alignmentSinrHistory = loc.alignmentSinrHistory,
-            alignmentRsrpHistory = loc.alignmentRsrpHistory
+            alignmentRsrpHistory = loc.alignmentRsrpHistory,
+            alignmentLastReadingAtMs = loc.alignmentLastReadingAtMs,
+            alignmentReadingSeq = loc.alignmentReadingSeq
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SignalUiState())
 
@@ -133,12 +148,17 @@ class SignalViewModel(
     fun enterAlignmentMode() {
         alignmentActive = true
         val current = container.statusRepository.alignmentSnapshot.value
+        val hasMetrics = current != null && (current.primaryRsrp != null || current.primarySinr != null)
+        lastReadingSnapshot = if (hasMetrics) current else null
+        val seededAtMs = if (hasMetrics) clock() else 0L
         local.update {
             it.copy(
                 bestSinr = current?.primarySinr,
                 bestRsrp = current?.primaryRsrp,
                 alignmentSinrHistory = listOfNotNull(current?.primarySinr),
-                alignmentRsrpHistory = listOfNotNull(current?.primaryRsrp)
+                alignmentRsrpHistory = listOfNotNull(current?.primaryRsrp),
+                alignmentLastReadingAtMs = seededAtMs,
+                alignmentReadingSeq = 0
             )
         }
         container.pollingCoordinator.setMode(PollingMode.ALIGNMENT)
@@ -147,6 +167,7 @@ class SignalViewModel(
     fun exitAlignmentMode() {
         if (!alignmentActive) return
         alignmentActive = false
+        lastReadingSnapshot = null
         container.pollingCoordinator.setMode(PollingMode.NORMAL)
     }
 
@@ -165,8 +186,11 @@ class SignalViewModel(
     }
 
     private fun recordAlignmentSample(snap: AlignmentSnapshot) {
+        if (!hasAlignmentValuesChanged(lastReadingSnapshot, snap)) return
+        lastReadingSnapshot = snap
         val curSinr = snap.primarySinr
         val curRsrp = snap.primaryRsrp
+        val readingAtMs = clock()
         local.update { prev ->
             val newBestSinr = when {
                 curSinr == null -> prev.bestSinr
@@ -184,7 +208,9 @@ class SignalViewModel(
                 bestSinr = newBestSinr,
                 bestRsrp = newBestRsrp,
                 alignmentSinrHistory = sinrHist,
-                alignmentRsrpHistory = rsrpHist
+                alignmentRsrpHistory = rsrpHist,
+                alignmentLastReadingAtMs = readingAtMs,
+                alignmentReadingSeq = prev.alignmentReadingSeq + 1
             )
         }
     }
@@ -262,7 +288,9 @@ class SignalViewModel(
         val bestSinr: Float? = null,
         val bestRsrp: Float? = null,
         val alignmentSinrHistory: List<Float> = emptyList(),
-        val alignmentRsrpHistory: List<Float> = emptyList()
+        val alignmentRsrpHistory: List<Float> = emptyList(),
+        val alignmentLastReadingAtMs: Long = 0L,
+        val alignmentReadingSeq: Int = 0
     )
 
     companion object {

@@ -215,23 +215,36 @@ fun formatDurationText(raw: String): String {
     if (clean.isEmpty() || clean == "-" || clean.equals("null", ignoreCase = true)) return "-"
     val totalSeconds = clean.toLongOrNull()
     if (totalSeconds != null) {
-        if (totalSeconds < 60L) return "${totalSeconds}s"
         val days = totalSeconds / 86_400L
         val hours = (totalSeconds % 86_400L) / 3600L
         val mins = (totalSeconds % 3600L) / 60L
-        return buildString {
-            if (days > 0) append("${days}d ")
-            if (hours > 0 || days > 0) append("${hours}h ")
-            append("${mins}m")
-        }.trim()
+        val secs = totalSeconds % 60L
+        return formatDurationParts(days, hours, mins, secs)
+    }
+    val dhms = Regex("""^(\d+)-(\d{1,2})-(\d{1,2})-(\d{1,2})$""").matchEntire(clean)
+    if (dhms != null) {
+        return formatDurationParts(
+            days = dhms.groupValues[1].toLong(),
+            hours = dhms.groupValues[2].toLong(),
+            mins = dhms.groupValues[3].toLong(),
+            secs = dhms.groupValues[4].toLong()
+        )
     }
     val hms = Regex("""^(\d+):(\d{1,2}):(\d{1,2})$""").matchEntire(clean)
     if (hms != null) {
         val h = hms.groupValues[1].toLong()
         val m = hms.groupValues[2].toLong()
-        return if (h >= 24) "${h / 24}d ${h % 24}h ${m}m" else "${h}h ${m}m"
+        val s = hms.groupValues[3].toLong()
+        return formatDurationParts(h / 24L, h % 24L, m, s)
     }
     return clean
+}
+
+private fun formatDurationParts(days: Long, hours: Long, mins: Long, secs: Long): String = when {
+    days > 0L -> "$days d $hours h"
+    hours > 0L -> "$hours h $mins m"
+    mins > 0L -> "$mins m"
+    else -> "$secs s"
 }
 
 fun formatDataSizeMb(mb: Double): String {

@@ -72,8 +72,8 @@ class StatusRepositoryPhase1Test {
         val state = (res as RouterResult.Ok).data
 
         assertEquals("10.8.42.19", state.wanIp)
-        assertEquals("3h 57m", state.onlineDurationText)
-        assertEquals("2d 0h 0m", state.uptimeText)
+        assertEquals("3 h 57 m", state.onlineDurationText)
+        assertEquals("2 d 0 h", state.uptimeText)
         assertEquals(2, state.carriers.size)
         assertEquals("62120", state.cellIdentity.plmn)
         assertEquals("22", state.linkDetails.dlMcs4g)

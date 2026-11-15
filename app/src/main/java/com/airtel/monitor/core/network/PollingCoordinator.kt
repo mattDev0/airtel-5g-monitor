@@ -124,7 +124,7 @@ class PollingCoordinator(
             while (isActive && _isAppInForeground.value && !_isPaused.value) {
                 runOneTick()
                 val delayMs = when (_mode.value) {
-                    PollingMode.ALIGNMENT -> 1000L
+                    PollingMode.ALIGNMENT -> 2000L
                     PollingMode.NORMAL -> pollIntervalProvider().coerceAtLeast(500L)
                 }
                 delay(delayMs)

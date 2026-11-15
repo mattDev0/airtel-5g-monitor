@@ -55,21 +55,25 @@ fun SignalQualityBand.label(): String = when (this) {
 @Composable
 fun SignalBars(
     level: Int,
-    maxBars: Int = 4,
+    maxBars: Int = 5,
     modifier: Modifier = Modifier,
     activeColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val desc = stringResource(R.string.cd_signal_bars, level.coerceIn(0, maxBars), maxBars)
     Row(
         modifier = modifier
-            .height(14.dp)
+            .height(15.dp)
             .semantics { contentDescription = desc },
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        val heights = listOf(4.dp, 7.dp, 10.dp, 14.dp)
+        val heights = if (maxBars == 5) {
+            listOf(4.dp, 6.dp, 9.dp, 12.dp, 15.dp)
+        } else {
+            listOf(4.dp, 7.dp, 10.dp, 14.dp)
+        }
         for (i in 0 until maxBars) {
-            val h = heights.getOrElse(i) { 14.dp }
+            val h = heights.getOrElse(i) { 15.dp }
             Box(
                 modifier = Modifier
                     .width(3.dp)

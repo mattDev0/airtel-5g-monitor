@@ -19,14 +19,20 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airtel.monitor.data.model.BandwidthPoint
 import com.airtel.monitor.data.model.CellularMetrics
 import com.airtel.monitor.data.model.HardwareMetrics
 import com.airtel.monitor.data.model.WanMetrics
+import com.airtel.monitor.ui.designsystem.Sparkline
+import com.airtel.monitor.ui.theme.AirtelTheme
 
 @Composable
 fun MinimalWanSpeedCard(
     wan: WanMetrics,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    history: List<BandwidthPoint> = emptyList(),
+    sparklineLabel: String? = null,
+    sparklineLegend: String? = null
 ) {
     val dlProgress by animateFloatAsState(
         targetValue = (wan.downloadMbps / 100.0).toFloat().coerceIn(0.01f, 1f),
@@ -104,6 +110,38 @@ fun MinimalWanSpeedCard(
                     progress = ulProgress,
                     isDownload = false,
                     modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (history.size >= 2) {
+                val colors = AirtelTheme.colors
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                if (!sparklineLabel.isNullOrBlank() || !sparklineLegend.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = sparklineLabel.orEmpty(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!sparklineLegend.isNullOrBlank()) {
+                            Text(
+                                text = sparklineLegend,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                Sparkline(
+                    values = history.map { it.downloadMbps.toFloat() },
+                    lineColor = colors.downloadSeries,
+                    secondaryValues = history.map { it.uploadMbps.toFloat() },
+                    secondaryColor = colors.uploadSeries,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }

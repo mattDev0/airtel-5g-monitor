@@ -66,7 +66,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
   - Hero status card with network-type badge, aggregated CA summary pill wired to `SharedTransitionLayout`, inline signal bars, compact primary RSRP/SINR readouts, WAN IP, and uptime/online chips.
   - 60-second DL/UL throughput `LineChart` sparkline + current rates and session totals.
   - Monthly data usage card (`cmd 401` + `cmd 337`) with progress indicator, billing-cycle days left, and data-warning badge.
-  - Quick toggles for Mobile Data (`cmd 4`), Wi-Fi 2.4 GHz (`cmd 224` / `202`), Wi-Fi 5 GHz (`cmd 225` / `202`), and Flight Mode (`cmd 132`) with Tier-2 `ConfirmSheet` confirmation before changing radio state, plus quick navigation tiles to Signal, Devices, Messages, and Alignment Mode.
+  - Quick toggles for Mobile Data (`cmd 222`, verified via `cmd 218`), Wi-Fi 2.4 GHz (`cmd 2`), Wi-Fi 5 GHz (`cmd 211`), and Flight Mode (`cmd 226`, verified via `cmd 218`) with Tier-2 `ConfirmSheet` confirmation before changing radio state, plus quick navigation tiles to Signal, Devices, Messages, and Alignment Mode.
 - **Signal Tab & Alignment Mode (`SignalViewModel.kt`, `SignalScreen.kt`, `AlignmentScreen.kt`, `AlignmentTonePlayer.kt`, `LockEditorSheet.kt`, `AppShell.kt`, `Routes.kt`):**
   - Restyled `LockEditorSheet.kt` onto `AirtelTheme.colors` semantic tokens and added a serving-carriers strip (`CarrierRow`) inside the sheet.
   - Signal tab displays the shared-element CA pill, serving-carrier `CarrierRow` breakdown, conditional 5G/4G `SignalMeter` bars, Link Details card, Copyable Cell Identity card (long-press clipboard copy via `LocalResources`), ~10-minute RSRP and SINR `LineChart` graphs, Neighbor Cells (`cmd 282`) with load button and format handling, read-only `cmd 218` Network Mode / CA status display, Cell/Band lock summary + editor, and Tier-2 confirmed Re-search Network (`cmd 288`).
@@ -85,4 +85,18 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 
 ### Blocked / Deferred
 - **No LAN route to `http://192.168.1.1` from this build environment:** `curl -sS --max-time 5 http://192.168.1.1/index.html` timed out (`Connection timed out after 5002 milliseconds`).
-- Because write schemas must be confirmed from the router web UI HTML/JS and recorded under `Write schemas` in `docs/ROUTER_API.md` before writing Kotlin, `cmd 218` network-mode / `mode5g` / `lteCA` / `nrCA` SET switching is deferred and rendered read-only in Phase 1. Phases 2–5 SET features (`cmd 23`, `115`, `208`, `367`, `275`, `202` WEP/hide, `214`, `134`, `213`, `503`, `132` PIN, `350`, `13`, `14`, `16`, `102`, `112`) are similarly blocked pending router web UI HTML/JS captures.
+- Because write schemas must be confirmed from the router web UI HTML/JS and recorded under `Write schemas` in `docs/ROUTER_API.md` before writing Kotlin, `cmd 218` network-mode / `mode5g` / `lteCA` / `nrCA` SET switching is deferred and rendered read-only in Phase 1. Phases 2–5 SET features (`cmd 23`, `115`, `208`, `367`, `275`, `202`, `214`, `134`, `213`, `503`, `132` WPS, `350`, `13`, `14`, `16`, `102`, `112`) are verified from the captured web UI dump ahead of Phase 2+.
+
+### Phase 1.1 Fixes (2026-11-15)
+- Removed double status-bar inset in `AppShell.kt` (`contentWindowInsets = WindowInsets(0)` on `Scaffold`; status-bar inset kept once on `HeaderBar`) and set scroll `contentPadding.bottom` to `GlassNavBarHeight + navigationBarsInset + 28.dp` across all tabs so bottom controls (e.g. DNS buttons) sit cleanly above the floating nav bar.
+- Extended `formatDurationText` to parse `D-H-M-S` strings (e.g. `0-1-19-52` -> `1 h 19 m`, `2-4-10-30` -> `2 d 4 h`).
+- Relabelled Home hero cell tile to `Cell` with `393 · 2CC` (dropping the duplicate `PCI` prefix).
+- Merged the 60 s DL/UL sparkline into `MinimalWanSpeedCard` and removed the duplicate throughput card.
+- Replaced the misleading `Icons.Rounded.DataUsage` broken ring on the Monthly Data Usage card with a determinate circular progress ring only when a limit is active, and no progress indicator plus a `Set a limit` action when no limit is set.
+- Removed the duplicate `B7 + B1 · 25 MHz` subtitle under Signal › Serving Carriers, keeping only the shared-element pill.
+- Aligned Home signal bars (`parseSignalBarsLevel` in `RouterDtoParsers.kt` + 5-bar `SignalBars`) to prioritize `cmd 205` / `cmd 394` over stale `cmd 113` values on the router's `0..5` scale from `js/main.js`.
+- Updated Alignment Mode (`PollingCoordinator`, `SignalViewModel`, `AlignmentScreen`) to format SINR to one decimal place, remove `cmd 205` internal jargon, poll at 2 s, show a refilling 10 s cadence ring + `Last update Xs ago` hint, and trigger haptics/tone/chart points only when RF values actually change.
+- Allowed two lines in `DeviceFleetSection.kt` so `<rate> Mbps` link rates are never clipped by `maxLines = 1`.
+- Fixed the Home quick-toggle command numbers above (`222`, `2`/`211`, `226`).
+- **Phase 1.1 Checks Run:** `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`61` unit tests across 9 test suites: 0 skipped, 0 failures, 0 errors; `lintDebug` passed with 0 errors and 8 SARIF entries; `assembleDebug` built `app-debug.apk`).
+
