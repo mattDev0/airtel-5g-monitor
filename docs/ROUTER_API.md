@@ -102,3 +102,38 @@ Command names come from `js/main.js` on the router. Values are not recorded here
 ## Not probed (actions — never call speculatively)
 
 6 SYS_REBOOT, 99/120 REBOOT, 112 RESTORE_DEFAULT, 116 SEARCH_PLMN, 228 SCCAN_PLMN, 288 RESCAN_NETWORK, 342 PCI_SCAN, 48/49 NET_CONNECT/DISCONNECT, 5/150/239 firmware update, 3 UPLOAD_FILE, 13/14 SMS send/delete, 45/270 AT commands, 237 ADB_SWITCH, 409 SSH.
+
+## Write schemas
+
+Every `POST` write goes through `SettingsWriter.write(WriteSpec(...))` (`GET` read -> preflight -> `cmd 233` write token -> single `POST` -> `GET` verify without blind `POST` retry). All bodies include `cmd`, `method: "POST"`, `sessionId`, and `token` alongside the fields below.
+
+### Verified in repo + `~/airtelOdu-webui/`
+
+| cmd | Const | Web UI source | Verified POST fields | Verify `GET` / check |
+|---:|---|---|---|---|
+| 2 | `WIRELESS_CONFIG` | `js/step.js:152-159`, `WifiRepository.kt` | `subcmd: 0`, `ssid` (Base64 UTF-8), `key`, `authenticationType`, plus preserved 2.4 GHz keys from `GET cmd 2 subcmd 0` (`wifiOpen`, `hidden`, `channel`, `bandwidth`, `wirelessMode`, `maxnum`, etc.) | `cmd 2 subcmd 0` |
+| 211 | `WIRELESS5G_CONFIG` | `js/step.js:160-167`, `WifiRepository.kt` | `subcmd: 0`, `ssid` (Base64 UTF-8), `key`, `authenticationType`, plus preserved 5 GHz keys from `GET cmd 211 subcmd 0` | `cmd 211 subcmd 0` |
+| 3 | `NETWORK_CONFIG` | `LanRepository.kt` | Preserved LAN/DHCP keys (`lanIp`, `netmask`, `dhcpServer`, `dhcpStart`, `dhcpEnd`, `leaseTime`, `bindPort0` when `supportList` exists) + `main_dns`, `vice_dns` | `cmd 3` |
+| 6 | `SYS_REBOOT` | `js/main.js:927-932` | `rebootType` (`1` normal reboot, `2` config change, `3` restore, `4` cancel, `5` update) | Re-login / `cmd 113` recovery |
+| 51 | `MODEM_CMD` | `js/step.js:220-255`, `js/home.js:596-605` | SIM PIN actions (`subcmd`: `"1"` enable/disable with `enable`, `pin`; `"2"` unlock PIN with `pin`; see `step.js`/`home.js` for PUK/change-PIN subcmds before Phase 5 implementation) | `cmd 134` (`QUERY_SIM_STATUS`) |
+| 102 | `CHANGE_PASSWD` | `js/index.js:76-82` | `subcmd` (`3` for account level `"2"` root, else `0`), `newPasswd` (Base64), `old_passwd` (Base64) | Login / `message == "success"` |
+| 160 | `LOCK_PHY_CELL` | `SignalRepository.kt` | `subcmd: "0"` LTE (`lte_lock_sw`, `lte_lock_freq`, `lte_lock_pci`, `lte_lock_max_num`) / `subcmd: "1"` NR (`nr_lock_sw`, `nr_lock_band`, `nr_lock_freq`, `nr_lock_pci`, `nr_lock_max_num`) | `cmd 160` |
+| 161 | `LOCK_BAND` | `SignalRepository.kt` | `lock_4g_flag`, `lock_5g_flag`, `lock_4g_list` (hex bitmask), `lock_5g_list` (hex bitmask), `lock_4g_max_num`, `lock_5g_max_num` | `cmd 161` |
+| 168 | `NETWORK_TOOLS` | `ZltRouterClientTest.kt` | Ping start (`subcmd: 0`, `url`, `pingTimes`), Traceroute (`subcmd: 2`, `url`, `stopped: "0"`) | `cmd 204 subcmd 168` |
+| 222 | `AUTO_DIAL` | `MobileRepository.kt` | `dialMode` (`"0"` on, `"1"` off per observed firmware mapping) | `cmd 218` |
+| 226 | `FLIGHT_MODE_INFO` | `MobileRepository.kt` | `flightMode` (`"1"` on, `"0"` off) | `cmd 218` |
+| 288 | `RESCAN_NETWORK` | `MobileRepository.kt` | Empty extra POST (`cmd: 288`, `method: "POST"`) | Status message |
+| 367 | `FW_SWITCH_SETTING` | `js/firewall/fw_switch_setting.js:43-50` | `fw_switch` (`"1"` / `"0"`), `level` (`"low"` / `"medium"` / `"high"`), `success: true` | `cmd 367 GET` |
+
+### Pending / uncaptured second-hop sub-pages in `~/airtelOdu-webui`
+
+`~/airtelOdu-webui/` captured top-level `MenuItem` `*Index.html` / `*Index.js` wrappers (`16` MenuItem URLs returned 404). Second-hop tab pages loaded dynamically via `secondMenuClick(items, id)` are absent from `~/airtelOdu-webui/`, so their `SET` schemas remain unverified and **must not be guessed**:
+
+- **Phase 2 (`Devices`) missing sub-pages:**
+  - `cmd 115` (`STATIC_LEASE`): `html/config/dhcpSetting.html`, `html/config/dhcpSettingMulti.html` (+ matching JS) referenced by `js/config/dhcpIndex.js`.
+  - `cmd 23` / `cmd 30` (`MAC_FILTER` / `MAC_DEFAULT_FILTER`): `html/firewall/macFilter.html`, `html/firewall/defaultMac.html` (+ matching JS) referenced by `js/firewall/macIndex.js`.
+  - `cmd 278` (`WIRELESS_MACFILTER`): `html/config/wifiList24g.html`, `html/config/wifiList5g.html` (+ matching JS) referenced by `js/config/wifiListIndex.js`.
+  - `cmd 382` / `383` / `385` / `391` (`PARENTAL_CONTROL_*` / `PARENT_MODEL`): `html/parent/parentControl.html`, `parentSpeed.html`, `parentTime.html`, `parentUrl.html` (+ matching JS). Note `cmd 391` UI is also gated behind `Page.parentControl == "1"` (`cmd 80` `parentControlSwitch`) and `pageHideCheck(153)`.
+- **Phases 3–5 missing sub-pages (to be checked before implementing those writes):**
+  - `cmd 218` (`networkSet.html/.js`), `cmd 213` (`apnConfig.html/.js`), `cmd 132` (`wirelessWpsSetting.html/.js`), `cmd 503` (`wifiToRestart.html/.js`), `cmd 214`/`215`/`275` (`dmz.html`, `upnp.html`, `ddos.html`), `cmd 350` (`ussd.html`), `cmd 112` (`restoreFactory.html`).
+  - Note: Phase 3–5 features whose full JS **is** captured (`js/sms/smsInbox.js`, `smsOutbox.js`, `smsSetting.js`, `js/config/algSetting.js`, `js/sys/timeToRestart.js`, `js/sys/antennaChange.js`, `js/update/fota.js`) will have their exact schemas appended here before writing Kotlin in Phases 3–5.

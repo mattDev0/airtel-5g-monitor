@@ -23,6 +23,12 @@ enum class DeviceFilter {
     LAN
 }
 
+enum class DevicePresenceFilter {
+    ALL,
+    ONLINE,
+    OFFLINE
+}
+
 enum class DeviceSort {
     SPEED,
     SIGNAL,
@@ -112,7 +118,11 @@ data class DeviceItem(
     val interfaceName: String = "wlan",
     val expires: String = "",
     val ipv6: String = "",
-    val isRouter: Boolean = false
+    val isRouter: Boolean = false,
+    val vendor: String = "",
+    val isPrivateMac: Boolean = false,
+    val isOnline: Boolean = true,
+    val hasCustomAlias: Boolean = false
 )
 
 data class BandwidthPoint(

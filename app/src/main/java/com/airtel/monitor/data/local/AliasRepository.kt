@@ -6,7 +6,12 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-class AliasRepository(private val context: Context) : AliasLookup {
+interface AliasStore : AliasLookup {
+    fun hasAlias(identifier: String): Boolean
+    fun saveAlias(identifier: String, alias: String)
+}
+
+class AliasRepository(private val context: Context) : AliasStore {
     private val aliasesFile: File
         get() = File(context.filesDir, "device_aliases.json")
 
@@ -25,8 +30,13 @@ class AliasRepository(private val context: Context) : AliasLookup {
         return aliasesCache[key] ?: fallback
     }
 
+    override fun hasAlias(identifier: String): Boolean {
+        val key = identifier.lowercase().trim()
+        return !aliasesCache[key].isNullOrBlank()
+    }
+
     @Synchronized
-    fun saveAlias(identifier: String, alias: String) {
+    override fun saveAlias(identifier: String, alias: String) {
         val key = identifier.lowercase().trim()
         if (alias.isBlank()) {
             aliasesCache.remove(key)

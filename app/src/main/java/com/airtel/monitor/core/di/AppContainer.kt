@@ -6,6 +6,7 @@ import com.airtel.monitor.core.network.PollingCoordinator
 import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.network.RouterTransport
 import com.airtel.monitor.core.network.SettingsWriter
+import com.airtel.monitor.core.util.OuiVendorLookup
 import com.airtel.monitor.data.local.AliasRepository
 import com.airtel.monitor.data.local.PreferencesRepository
 import com.airtel.monitor.data.repository.DeviceRepository
@@ -32,6 +33,7 @@ class AppContainer(application: Application) {
 
     val preferencesRepository = PreferencesRepository(application)
     val aliasRepository = AliasRepository(application)
+    val ouiVendorLookup = OuiVendorLookup.fromAsset(application)
 
     val transport: RouterTransport = OkHttpRouterTransport()
     val routerSession = RouterSession(preferencesRepository, transport)
@@ -39,7 +41,7 @@ class AppContainer(application: Application) {
 
     val statusRepository = StatusRepository(routerSession, aliasRepository)
     val signalRepository = SignalRepository(routerSession, settingsWriter)
-    val deviceRepository = DeviceRepository(statusRepository, aliasRepository)
+    val deviceRepository = DeviceRepository(statusRepository, aliasRepository, ouiVendorLookup)
     val wifiRepository = WifiRepository(routerSession, settingsWriter)
     val mobileRepository = MobileRepository(routerSession, settingsWriter, statusRepository)
     val lanRepository = LanRepository(routerSession, settingsWriter)

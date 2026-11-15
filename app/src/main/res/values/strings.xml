@@ -136,4 +136,25 @@
     <string name="reboot_confirm_title">Reboot Router?</string>
     <string name="reboot_confirm_impact">This restarts the ZLT X17M 5G router. Internet connectivity will drop for 1–2 minutes.</string>
     <string name="reboot_confirm_button">Reboot</string>
+    <!-- Phase 2: Devices -->
+    <string name="devices_search_placeholder">Search name, vendor, IP or MAC</string>
+    <string name="devices_filter_presence_all">All (%1$d)</string>
+    <string name="devices_filter_presence_online">Online (%1$d)</string>
+    <string name="devices_filter_presence_offline">Offline (%1$d)</string>
+    <string name="devices_sort_label">Sort</string>
+    <string name="devices_empty_title">No devices match</string>
+    <string name="devices_empty_filtered_message">Try clearing the search query or switching filters.</string>
+    <string name="devices_empty_none_message">Waiting for connected client data from the router.</string>
+    <string name="devices_clear_filters">Clear filters</string>
+    <string name="device_vendor_unknown">Unknown vendor</string>
+    <string name="device_private_mac">Private / Randomized MAC</string>
+    <string name="device_private_mac_hint">This device uses a locally administered MAC address (privacy randomization).</string>
+    <string name="device_status_online">Online</string>
+    <string name="device_status_offline">Offline lease</string>
+    <string name="device_lease_expired">Expired</string>
+    <string name="device_action_copy_mac">Copy MAC</string>
+    <string name="device_action_copy_ip">Copy IP</string>
+    <string name="device_action_rename">Rename</string>
+    <string name="device_action_reset_name">Reset name</string>
+    <string name="device_role_router">Gateway / Router</string>
 </resources>

@@ -100,3 +100,41 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Fixed the Home quick-toggle command numbers above (`222`, `2`/`211`, `226`).
 - **Phase 1.1 Checks Run:** `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`61` unit tests across 9 test suites: 0 skipped, 0 failures, 0 errors; `lintDebug` passed with 0 errors and 8 SARIF entries; `assembleDebug` built `app-debug.apk`).
 
+---
+
+## Phase 2 — Devices
+
+**Status:** Complete for read-only enrichment, filtering, OUI vendor lookup, and detail inspection (verified by unit tests, lint, and debug APK build; Phase 2 router write features such as static DHCP leases and MAC blocking remain deferred because their second-hop web UI sub-pages are missing from `~/airtelOdu-webui/` and must not be guessed)
+
+### Implemented
+- **Offline IEEE OUI Vendor & Private MAC Lookup (`OuiVendorLookup.kt`, `app/src/main/assets/oui.csv`):**
+  - Built an offline `oui.csv` asset (`8,028` IEEE OUI entries mapped to major phone, laptop, router, IoT, and chipset vendors from `/usr/share/ieee-data/oui.csv` using word-boundary filtering).
+  - Implemented `OuiVendorLookup` with formatted MAC helpers (`formatMac`), vendor lookup (`lookup`), and locally administered unicast MAC detection (`(firstOctet and 0x03) == 0x02`) for randomized/private MACs (`OuiMatch`).
+  - Wired `OuiVendorLookup.fromAsset(...)` into `AppContainer` and `DeviceRepository`.
+- **Device Enrichment & Alias Management (`RouterModels.kt`, `AliasRepository.kt`, `DeviceRepository.kt`):**
+  - Added `DevicePresenceFilter` (`ALL`, `ONLINE`, `OFFLINE`) and extended `DeviceItem` with `vendor`, `isPrivateMac`, `isOnline`, and `hasCustomAlias`.
+  - Extracted `AliasStore` in `AliasRepository.kt` and added `clearAlias` plus an `aliasVersion` flow in `DeviceRepository.kt` so renames/resets propagate immediately across UI collectors without waiting for the next poll.
+  - Added `determineOnline` heuristic (expired DHCP leases with `expires == "0"` or wireless clients missing active `rssi`/`tx`/`rx` telemetry are marked offline) and OUI-based `DeviceType` refinement when `DEVICE`.
+- **Devices Tab & Detail Bottom Sheet (`DevicesViewModel.kt`, `DevicesScreen.kt`, `DeviceDetailSheet.kt`, `strings.xml`):**
+  - Added live device counts (`onlineCount`, `offlineCount`, `wifi5gCount`, `wifi24gCount`, `lanCount`), `presenceFilter`, live-recomputed `selectedDevice`, `clearFilters()`, `clearAlias()`, and vendor/IPv6/SSID/`"private randomized"` search matching in `DevicesViewModel`.
+  - Rebuilt `DevicesScreen` with interactive summary `StatTile` cards, search bar + presence/band/sort filter chips, `EmptyState` with `"Clear filters"`, rich device rows (online status dot, `"Renamed"` badge, vendor/private MAC subtitle, 5-bar signal/Ethernet/offline indicator, quick rename action), and `DeviceDetailSheet` (`ModalBottomSheet` with copyable MAC/IPv4/IPv6/hostname, vendor & private-MAC explanation, link rate, signal bars, formatted lease expiry, Rename, and Reset name).
+- **Web UI Write Schema Audit (`docs/ROUTER_API.md`):**
+  - Added `## Write schemas` in `docs/ROUTER_API.md` documenting verified `POST` payloads (`cmd 2`, `211`, `3`, `6`, `51`, `102`, `160`, `161`, `168`, `222`, `226`, `288`, `367`) and cataloging uncaptured second-hop `secondMenuClick` sub-pages in `~/airtelOdu-webui/`.
+- **Tests:**
+  - Added `OuiVendorLookupTest.kt` (`3` tests) and `DeviceRepositoryAndViewModelTest.kt` (`2` tests).
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`66` unit tests across `11` test suites: `0` skipped, `0` failures, `0` errors; `lintDebug` passed with `0` errors and `39` warnings; `assembleDebug` built `app-debug.apk`).
+
+### Untested on Device / Live Router
+- Runtime Compose rendering and clipboard copy feedback in `DevicesScreen` and `DeviceDetailSheet` against live `cmd 223` / `cmd 225` / `cmd 3` router payloads.
+- Confirming real firmware `expires` and wireless association edge cases for offline DHCP lease detection across extended lease expiry on the ZLT X17M.
+
+### Blocked / Deferred
+- Second-hop `secondMenuClick` HTML/JS files for Phase 2 write actions are absent from `~/airtelOdu-webui/`, so these writes were intentionally omitted rather than guessing router schemas:
+  - Static DHCP reservations (`cmd 115`: `html/config/dhcpSetting.html/.js`)
+  - MAC filtering & default policy (`cmd 23` / `cmd 30`: `html/firewall/macFilter.html`, `defaultMac.html`)
+  - Wireless 2.4 / 5 GHz MAC filters (`cmd 278`: `html/config/wifiList24g.html`, `wifiList5g.html`)
+  - Parental controls (`cmd 382` / `383` / `385` / `391`: `html/parent/parentControl.html`, `parentSpeed.html`, `parentTime.html`, `parentUrl.html`, gated by `parentControlSwitch` / `pageHideCheck(153)`)
+
+
