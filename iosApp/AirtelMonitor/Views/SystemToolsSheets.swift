@@ -262,14 +262,21 @@ public struct WanLinkDetectSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        var cfg = viewModel.wanLinkDetect
-                        cfg.enabled = enabled
-                        cfg.checkTimeSec = checkTimeSec
-                        cfg.mode = mode
-                        cfg.ip1 = ip1
-                        cfg.ip2 = ip2
-                        cfg.action = action
-                        cfg.rebootWaitMinutes = rebootWaitMinutes
+                        let cur = viewModel.wanLinkDetect
+                        let cfg = WanLinkDetectConfig(
+                            enabled: enabled,
+                            networkMode: cur.networkMode,
+                            isMixMode: cur.isMixMode,
+                            checkTimeSec: checkTimeSec,
+                            mode: mode,
+                            ip1: ip1,
+                            ip2: ip2,
+                            ipv6Ip1: cur.ipv6Ip1,
+                            ipv6Ip2: cur.ipv6Ip2,
+                            action: action,
+                            rebootWaitMinutes: rebootWaitMinutes,
+                            dialWaitSec: cur.dialWaitSec
+                        )
                         viewModel.saveWanLinkDetect(cfg)
                     }
                     .disabled(viewModel.sheetBusy)

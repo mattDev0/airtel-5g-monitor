@@ -100,9 +100,9 @@ public final class SecurityRepository: ObservableObject {
                         FirewallLevel.fromRaw(CodecHelpers.str(rb, "level")) == level
                 },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if res.isOk {
@@ -130,9 +130,9 @@ public final class SecurityRepository: ObservableObject {
                 },
                 verify: { rb in Self.parseAlg(rb) == next },
                 parseResult: { Self.parseAlg($0) },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res {
@@ -164,9 +164,9 @@ public final class SecurityRepository: ObservableObject {
                 parseResult: {
                     DmzConfig(enabled: CodecHelpers.str($0, "enabled") == "1", ip: CodecHelpers.str($0, "ip"))
                 },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let cfg) = res { self.dmz = cfg }
@@ -182,9 +182,9 @@ public final class SecurityRepository: ObservableObject {
                 buildPayload: { _ in ["ddosSwich": flag] },
                 verify: { rb in CodecHelpers.str(rb, "ddosSwich") == flag },
                 parseResult: { DdosConfig(enabled: CodecHelpers.str($0, "ddosSwich") == "1") },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let cfg) = res { self.ddos = cfg }
@@ -200,9 +200,9 @@ public final class SecurityRepository: ObservableObject {
                 buildPayload: { _ in ["upnpSwitch": flag] },
                 verify: { rb in DmzAndUpnp.parseUpnp(rb).enabled == enabled },
                 parseResult: { DmzAndUpnp.parseUpnp($0) },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .badResponse = res {
@@ -212,9 +212,9 @@ public final class SecurityRepository: ObservableObject {
                     buildPayload: { _ in ["upnpSwitch": flag] },
                     verify: { rb in DmzAndUpnp.parseUpnp(rb).enabled == enabled },
                     parseResult: { DmzAndUpnp.parseUpnp($0) },
-                    skipPreRead: true,
                     verifyRetries: 3,
-                    verifyDelaySeconds: 1.0
+                    verifyDelaySeconds: 1.0,
+                    skipPreRead: true
                 )
             )
         }
@@ -531,9 +531,9 @@ public final class SecurityRepository: ObservableObject {
                     return p.enabled == enabled && p.ips == cleaned
                 },
                 parseResult: { Self.parseTrustedIp($0) },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let cfg) = res { self.trustedIp = cfg }

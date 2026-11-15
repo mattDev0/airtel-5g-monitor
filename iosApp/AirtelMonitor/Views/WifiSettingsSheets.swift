@@ -263,13 +263,17 @@ public struct GuestWifiSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        var next = cfg
-                        next.wifiOpen = enabled
-                        next.ssid = ssid
-                        next.key = key
-                        next.authenticationType = authType
-                        next.broadcast = broadcast
-                        next.wmm = wmm
+                        let next = GuestWifiBandConfig(
+                            wifiOpen: enabled,
+                            ssid: ssid,
+                            key: key,
+                            authenticationType: authType,
+                            encryption: cfg.encryption,
+                            broadcast: broadcast,
+                            wmm: wmm,
+                            mainWifiOpen: cfg.mainWifiOpen,
+                            customPort: cfg.customPort
+                        )
                         viewModel.saveGuestWifi(band: band, config: next)
                     }
                     .disabled(viewModel.sheetSaving || !cfg.mainWifiOpen)
@@ -356,13 +360,21 @@ public struct WifiAdvancedSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        guard var next = (band == .band24g ? viewModel.adv24g : viewModel.adv5g) else { return }
-                        next.channel = channel
-                        next.bandWidth = bandWidth
-                        next.txPower = txPower
-                        next.maxNum = maxNum
-                        next.apIsolate = apIsolate
-                        next.dfsSwitch = dfsSwitch
+                        guard let cur = (band == .band24g ? viewModel.adv24g : viewModel.adv5g) else { return }
+                        let next = WifiAdvancedBandConfig(
+                            wifiOpen: cur.wifiOpen,
+                            countryCode: cur.countryCode,
+                            workMode: cur.workMode,
+                            channel: channel,
+                            bandWidth: bandWidth,
+                            txPower: txPower,
+                            maxNum: maxNum,
+                            maxNumLimit: cur.maxNumLimit,
+                            apIsolate: apIsolate,
+                            dfsSwitch: dfsSwitch,
+                            clientStaReadOnly: cur.clientStaReadOnly,
+                            staLimitPrompt: cur.staLimitPrompt
+                        )
                         viewModel.saveWifiAdvanced(band: band, config: next)
                     }
                     .disabled(viewModel.sheetSaving)

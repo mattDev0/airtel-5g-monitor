@@ -23,10 +23,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["dialMode": target] },
                 verify: { rb in CodecHelpers.str(rb, "dialMode") == target },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 5,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
     }
@@ -40,10 +40,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["flightMode": target] },
                 verify: { rb in CodecHelpers.str(rb, "flightMode") == target },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 5,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
     }
@@ -111,10 +111,10 @@ public final class MobileRepository: ObservableObject {
                     return abs(p.totalUsedMb - targetUsedMb) <= max(1.0, targetUsedMb * 0.02)
                 },
                 parseResult: { Self.parseTrafficLimit($0) },
-                skipPreRead: true,
                 verifyRetries: 4,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res { self.trafficLimit = saved }
@@ -130,10 +130,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["statisticsReset": "1"] },
                 verify: { rb in Self.parseTrafficLimit(rb).totalUsedMb <= 1.0 },
                 parseResult: { Self.parseTrafficLimit($0) },
-                skipPreRead: true,
                 verifyRetries: 4,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res { self.trafficLimit = saved }
@@ -177,10 +177,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["networkMode": clean] },
                 verify: { rb in CodecHelpers.str(rb, "networkMode").uppercased() == clean },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 5,
                 verifyDelaySeconds: 1.5,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
         if !res.isOk { return res.castFailure() }
@@ -197,10 +197,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["lteCA": target] },
                 verify: { rb in CodecHelpers.str(rb, "lteCA") == target },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 4,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
         if !res.isOk { return res.castFailure() }
@@ -217,10 +217,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["nrCA": target] },
                 verify: { rb in CodecHelpers.str(rb, "nrCA") == target },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 4,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
         if !res.isOk { return res.castFailure() }
@@ -237,10 +237,10 @@ public final class MobileRepository: ObservableObject {
                 buildPayload: { _ in ["roamingEnable": target] },
                 verify: { rb in CodecHelpers.str(rb, "roamingEnable") == target },
                 parseResult: { _ in Unit() },
-                skipPreRead: true,
                 verifyRetries: 4,
                 verifyDelaySeconds: 1.0,
-                allowEmptyWriteReply: true
+                allowEmptyWriteReply: true,
+                skipPreRead: true
             )
         )
         if !res.isOk { return res.castFailure() }
@@ -332,9 +332,9 @@ public final class MobileRepository: ObservableObject {
                         zip(read, profiles).allSatisfy { $0.apnName == $1.apnName.trimmingCharacters(in: .whitespacesAndNewlines) }
                 },
                 parseResult: { Self.parseApnList($0) },
-                skipPreRead: true,
                 verifyRetries: 4,
-                verifyDelaySeconds: 1.5
+                verifyDelaySeconds: 1.5,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res {

@@ -529,9 +529,9 @@ public final class WifiRepository: ObservableObject {
                         (!cfg.enabled || (p.onHour == cfg.onHour && p.offHour == cfg.offHour))
                 },
                 parseResult: { Self.parseSchedule($0) },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res { self.schedule = saved }

@@ -16,7 +16,8 @@ public enum CodecHelpers {
     }
 
     public static func str(_ dict: [String: Any], _ key: String, fallback: String = "") -> String {
-        RouterSession.str(dict, key, fallback: fallback)
+        let s = RouterSession.str(dict, key)
+        return s.isEmpty ? fallback : s
     }
 
     public static func nonBlankStr(_ dict: [String: Any], _ key: String) -> String? {
@@ -487,8 +488,9 @@ public enum RouterParsers {
             }
 
             let match = ouiLookup.lookup(macUpper)
+            let vendorName = match.vendor ?? ""
             let online = determineOnline(isLan: isLan, expires: expires, hasWifiAssoc: wifiRow != nil, rssi: rssi, txRate: txRate, rxRate: rxRate)
-            let devType = inferDeviceType(hostname: hostname, vendor: match.vendor, ip: ip)
+            let devType = inferDeviceType(hostname: hostname, vendor: vendorName, ip: ip)
 
             let identifier = macUpper.isEmpty ? ip : macUpper
             let customAlias = aliasLookup(identifier, hostname)
@@ -510,7 +512,7 @@ public enum RouterParsers {
                 expires: expires,
                 ipv6: ipv6,
                 isRouter: devType == .router,
-                vendor: match.vendor,
+                vendor: vendorName,
                 isPrivateMac: match.isPrivateMac,
                 isOnline: online,
                 hasCustomAlias: hasCustom
@@ -531,7 +533,8 @@ public enum RouterParsers {
             let ssid = CodecHelpers.str(row, "ssid")
             let sigPct = Int(rssi).map { min(max(2 * ($0 + 100), 0), 100) } ?? 0
             let match = ouiLookup.lookup(macUpper)
-            let fallbackName = match.vendor.isEmpty ? "Wi-Fi Client" : match.vendor
+            let vendorName = match.vendor ?? ""
+            let fallbackName = vendorName.isEmpty ? "Wi-Fi Client" : vendorName
             let identifier = macUpper.isEmpty ? ip : macUpper
 
             result.append(DeviceItem(
@@ -539,7 +542,7 @@ public enum RouterParsers {
                 ip: ip,
                 hostname: fallbackName,
                 alias: aliasLookup(identifier, fallbackName),
-                type: inferDeviceType(hostname: fallbackName, vendor: match.vendor, ip: ip),
+                type: inferDeviceType(hostname: fallbackName, vendor: vendorName, ip: ip),
                 band: is5g ? "5 GHz" : "2.4 GHz",
                 ssid: ssid,
                 rssi: rssi,
@@ -550,7 +553,7 @@ public enum RouterParsers {
                 expires: "",
                 ipv6: "",
                 isRouter: false,
-                vendor: match.vendor,
+                vendor: vendorName,
                 isPrivateMac: match.isPrivateMac,
                 isOnline: true,
                 hasCustomAlias: hasAliasLookup(identifier)

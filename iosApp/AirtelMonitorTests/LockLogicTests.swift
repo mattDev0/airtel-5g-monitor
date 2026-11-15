@@ -35,7 +35,7 @@ final class LockLogicTests: XCTestCase {
             "lte_lock_pci": "12,44",
             "lock_4g_flag": "1",
             "nr_lock_sw": "1",
-            "nr_lock_band": "78",
+            "nr_lock_cell_band": "78",
             "nr_lock_freq": "633984",
             "nr_lock_pci": "201",
             "lock_5g_flag": "1"

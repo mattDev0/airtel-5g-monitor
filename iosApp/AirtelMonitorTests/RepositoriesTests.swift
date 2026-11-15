@@ -35,9 +35,14 @@ final class RepositoriesTests: XCTestCase {
                 "FREQ_5G": "633984",
                 "PCI_5G": "201",
                 "flow_dl": "300",
-                "flow_ul": "100",
-                "wan_ip": "10.20.30.40"
+                "flow_ul": "100"
             ])
+        }
+        await transport.setHandler(cmd: 133) { _ in
+            .ok(["wan_ip": "10.20.30.40"])
+        }
+        await transport.setHandler(cmd: 401) { _ in
+            .ok(["wan_ip": "10.20.30.40"])
         }
         await transport.setHandler(cmd: 223) { _ in
             .ok([
@@ -50,7 +55,7 @@ final class RepositoriesTests: XCTestCase {
             .ok(["wlan5g_wifi_info": [["mac": "AA:BB:CC:DD:EE:FF", "rssi": "-55", "txrate": "866", "rxrate": "780", "ssid": "Airtel5G"]]])
         }
         await transport.setHandler(cmd: 337) { _ in
-            .ok(["limit_switch": "1", "limit_size": "100", "limit_unit": "3", "ul_mon_flow": "2048", "dl_mon_flow": "512"])
+            .ok(["limitSwitch": "1", "limitSize": "100", "flow_limit_unit": "1", "ul_mon_flow": "2048", "dl_mon_flow": "512"])
         }
         await transport.setHandler(cmd: 394) { _ in .ok(["sms_unread": "2"]) }
 
@@ -87,11 +92,11 @@ final class RepositoriesTests: XCTestCase {
         XCTAssertFalse(denied.isOk)
 
         await transport.setHandler(cmd: 337, method: "GET") { _ in
-            .ok(["limit_switch": "1", "limit_size": "100", "limit_unit": "3", "ul_mon_flow": "1000", "dl_mon_flow": "200"])
+            .ok(["limitSwitch": "1", "limitSize": "100", "flow_limit_unit": "1", "ul_mon_flow": "1000", "dl_mon_flow": "200"])
         }
         await transport.setHandler(cmd: 337, method: "POST") { _ in
             await transport.setHandler(cmd: 337, method: "GET") { _ in
-                .ok(["limit_switch": "1", "limit_size": "100", "limit_unit": "3", "ul_mon_flow": "5000", "dl_mon_flow": "0"])
+                .ok(["limitSwitch": "1", "limitSize": "100", "flow_limit_unit": "1", "ul_mon_flow": "5000", "dl_mon_flow": "0"])
             }
             return .ok(["success": true])
         }
@@ -108,7 +113,9 @@ final class RepositoriesTests: XCTestCase {
 
         // SIM change PIN (cmd 51 subcmd 4 -> pin + pinPasswordChange + enable: "2")
         await transport.setHandler(cmd: 51, method: "POST") { _ in .ok(["message": "0", "success": true]) }
-        await transport.setHandler(cmd: 134, method: "GET") { _ in .ok(["lock_pin_switch": "1", "need_pin_puk": "0", "pin_number": "3"]) }
+        await transport.setHandler(cmd: 134, method: "GET") { _ in
+            .ok(["lock_pin_switch": "1", "lock_pin_flag": "0", "pin_left_times": "3"])
+        }
         await transport.setHandler(cmd: 113, method: "GET") { _ in .ok(["sim_status": "1"]) }
         let simRepo = SimRepository(session: session, writer: writer)
         let pinRes = await simRepo.changePin(oldPin: "1234", newPin: "4321")
@@ -118,16 +125,15 @@ final class RepositoriesTests: XCTestCase {
         XCTAssertEqual(pinPost?.payload["pinPasswordChange"] as? String, "4321")
         XCTAssertEqual(pinPost?.payload["enable"] as? String, "2")
 
-        // SMS load & send (Base64 UTF-8)
-        let smsBodyB64 = CodecHelpers.encodeBase64Utf8("Welcome to Airtel 5G")
+        // SMS load & send (Base64 UTF-8 of "<idx> <readFlag> <phone> <yyyy-MM-dd HH:mm> <body...>")
+        let rowB64 = CodecHelpers.encodeBase64Utf8("1 0 +234800 2026-05-01 10:00 Welcome to Airtel 5G")
         await transport.setHandler(cmd: 12, method: "GET") { _ in
             .ok([
-                "sms_data": [["index": "1", "phone_num": "+234800", "date": "2026-05-01 10:00", "content": smsBodyB64, "state": "1"]],
-                "count": 1,
-                "unread_num": 1
+                "sms_list": rowB64,
+                "sms_total": "1"
             ])
         }
-        await transport.setHandler(cmd: 14, method: "POST") { _ in .ok(["success": true]) }
+        await transport.setHandler(cmd: 14, method: "POST") { _ in .ok(["success": true, "message": "0"]) }
         var syncedUnread: Int?
         let smsRepo = SmsRepository(session: session, writer: writer, onUnreadCountSync: { syncedUnread = $0 })
         let smsPage = await smsRepo.loadPage(folder: .inbox)
@@ -139,7 +145,7 @@ final class RepositoriesTests: XCTestCase {
 
         // USSD send
         await transport.setHandler(cmd: 350, method: "POST") { _ in
-            .ok(["success": true, "message": "1. Check Balance\n2. Data Plan", "ussdStatus": "2"])
+            .ok(["success": true, "message": "1. Check Balance\n2. Data Plan", "need_reply": "1"])
         }
         let ussdRepo = UssdRepository(session: session, writer: writer)
         let ussdRes = await ussdRepo.send(input: "*123#")
@@ -153,15 +159,16 @@ final class RepositoriesTests: XCTestCase {
     func testSecurityParentalAndSystemRepositories() async {
         let (transport, session, writer, prefs) = makeStack()
 
-        // Security: reserved system port check & MAC filter + applyFilter
+        // Security: reserved system port check & firewall switch
         await transport.setHandler(cmd: 400, method: "GET") { _ in .ok(["systemPort": "80 443"]) }
+        await transport.setHandler(cmd: 367, method: "GET") { _ in .ok(["fw_switch": "1", "level": "high"]) }
         let secRepo = SecurityRepository(session: session, writer: writer)
+        _ = await secRepo.loadAll()
         let badPort = await secRepo.savePortForwards([
             PortForwardRule(port: "80", mappingPort: "80", mappingIp: "192.168.1.50")
         ])
         XCTAssertFalse(badPort.isOk)
 
-        await transport.setHandler(cmd: 367, method: "GET") { _ in .ok(["fwSwitch": "1", "firewallLevel": "high"]) }
         await transport.setHandler(cmd: 367, method: "POST") { _ in .ok(["success": true]) }
         let fwRes = await secRepo.saveFirewallSwitch(enabled: true, level: .high)
         XCTAssertTrue(fwRes.isOk)

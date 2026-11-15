@@ -54,9 +54,9 @@ public final class ParentalControlRepository: ObservableObject {
                 buildPayload: { _ in ["enable": target] },
                 verify: { rb in CodecHelpers.str(rb, "enable") == target },
                 parseResult: { CodecHelpers.str($0, "enable") == "1" },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         guard res.isOk else { return res.castFailure() }

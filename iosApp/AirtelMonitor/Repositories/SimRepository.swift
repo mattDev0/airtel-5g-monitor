@@ -51,9 +51,9 @@ public final class SimRepository: ObservableObject {
                 parseResult: { j134 in
                     Self.parseState(j113: [:], j134: j134, prev: self.state)
                 },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         _ = await loadStatus()

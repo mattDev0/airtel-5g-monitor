@@ -140,7 +140,7 @@ public final class OnboardingViewModel: ObservableObject {
             host: finalHost,
             username: finalUser,
             password: password,
-            onboardingCompleted: true
+            markOnboardingCompleted: true
         )
         Task {
             await container.session.resetSession()

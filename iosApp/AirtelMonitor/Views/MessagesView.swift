@@ -438,7 +438,7 @@ private struct UssdDialerSheet: View {
                         ForEach(Array(viewModel.ussdState.history.enumerated().reversed()), id: \.offset) { _, item in
                             SectionCard {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("> \(item.outgoing)")
+                                    Text("> \(item.outgoing ?? "")")
                                         .font(.caption.weight(.bold).monospacedDigit())
                                         .foregroundStyle(AirtelTheme.accent)
                                     Text(item.response)

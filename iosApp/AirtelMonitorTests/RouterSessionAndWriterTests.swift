@@ -263,8 +263,8 @@ final class RouterSessionAndWriterTests: XCTestCase {
         store.recordDailyUsageSample(monthlyUsedMb: 300, date: d3)
 
         XCTAssertEqual(store.dailyUsageEntries.count, 3)
-        XCTAssertEqual(store.dailyUsageEntries[1].deltaMb, 550, accuracy: 0.01)
-        XCTAssertEqual(store.dailyUsageEntries[2].deltaMb, 300, accuracy: 0.01)
+        XCTAssertEqual(store.dailyUsageEntries[1].dailyMb, 550, accuracy: 0.01)
+        XCTAssertEqual(store.dailyUsageEntries[2].dailyMb, 300, accuracy: 0.01)
     }
 }
 

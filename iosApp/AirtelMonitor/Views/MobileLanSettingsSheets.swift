@@ -423,15 +423,19 @@ public struct LanDhcpSheet: View {
             confirmLabel: "Save LAN Settings",
             tier: .connectivity,
             onConfirm: {
-                var next = viewModel.lanConfig
-                next.lanIp = lanIp
-                next.netMask = netMask
-                next.dhcpEnabled = dhcpEnabled
-                next.ipBegin = ipBegin
-                next.ipEnd = ipEnd
-                next.expireTime = expireTime
-                next.primaryDns = dns1
-                next.secondaryDns = dns2
+                let cur = viewModel.lanConfig
+                let next = LanConfig(
+                    lanIp: lanIp,
+                    netMask: netMask,
+                    dhcpEnabled: dhcpEnabled,
+                    ipBegin: ipBegin,
+                    ipEnd: ipEnd,
+                    expireTime: expireTime,
+                    primaryDns: dns1,
+                    secondaryDns: dns2,
+                    ipv6PrimaryDns: cur.ipv6PrimaryDns,
+                    ipv6SecondaryDns: cur.ipv6SecondaryDns
+                )
                 viewModel.saveLanDhcp(next)
             }
         )

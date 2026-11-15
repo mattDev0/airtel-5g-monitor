@@ -173,9 +173,9 @@ public final class LanRepository: ObservableObject {
                 buildPayload: { _ in ["datas": wireDatas] },
                 verify: { Self.parseStaticLeases($0) == clean },
                 parseResult: { Self.parseStaticLeases($0) },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         guard case .ok(let saved) = res else { return res }

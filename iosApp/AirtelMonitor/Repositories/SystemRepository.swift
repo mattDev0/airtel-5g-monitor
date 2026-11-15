@@ -143,9 +143,9 @@ public final class SystemRepository: ObservableObject {
                         logGrade: LogGrade.fromRaw(CodecHelpers.str(rb, "logGrade", fallback: "0"))
                     )
                 },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res { self.logSettings = saved }
@@ -197,9 +197,9 @@ public final class SystemRepository: ObservableObject {
                     return p.enabled == enabled && (!enabled || (p.timeHhMm == "\(hh):\(mm)" && p.weekDays == daysStr))
                 },
                 parseResult: { Self.parseScheduledReboot($0) },
-                skipPreRead: true,
                 verifyRetries: 3,
-                verifyDelaySeconds: 1.0
+                verifyDelaySeconds: 1.0,
+                skipPreRead: true
             )
         )
         if case .ok(let saved) = res { self.scheduledReboot = saved }

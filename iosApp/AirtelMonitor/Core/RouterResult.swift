@@ -18,6 +18,8 @@ public enum RouterResult<T> {
         return nil
     }
 
+    public func getOrNull() -> T? { value }
+
     public var errorMessage: String? {
         switch self {
         case .ok:

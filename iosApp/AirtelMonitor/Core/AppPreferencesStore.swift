@@ -301,7 +301,7 @@ public final class AppPreferencesStore: ObservableObject {
         }
     }
 
-    public static func normalizeHost(_ raw: String) -> String {
+    public nonisolated static func normalizeHost(_ raw: String) -> String {
         let trimmed = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "http://", with: "", options: .caseInsensitive)
