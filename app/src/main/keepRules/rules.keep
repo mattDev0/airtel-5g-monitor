@@ -15,3 +15,7 @@
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 -keep public class * extends android.appwidget.AppWidgetProvider
+
+# Room databases (WorkManager's WorkDatabase_Impl) are created by reflection through their no-arg constructor.
+# Without this, R8 strips it and the app crashes on launch in WorkManagerInitializer.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
