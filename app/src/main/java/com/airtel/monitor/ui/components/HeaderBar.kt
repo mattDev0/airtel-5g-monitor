@@ -43,13 +43,13 @@ fun HeaderBar(
     isPaused: Boolean,
     pollInterval: Float,
     routerHost: String,
-    smsUnreadCount: Int = 0,
-    onOpenSms: () -> Unit = {},
     onTogglePause: () -> Unit,
     onForceRefresh: () -> Unit,
     onSelectPollInterval: (Float) -> Unit,
     onOpenReboot: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    smsUnreadCount: Int = 0,
+    onOpenSms: () -> Unit = {}
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val semantic = AirtelTheme.colors

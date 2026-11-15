@@ -29,10 +29,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +63,10 @@ internal fun MessageDetailSheet(
     onDeleteRequest: (SmsMessage) -> Unit
 ) {
     val spacing = AirtelTheme.spacing
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -163,7 +167,10 @@ internal fun ComposeSmsSheet(
     onRequestSend: (phone: String, body: String) -> Unit
 ) {
     val spacing = AirtelTheme.spacing
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var phone by remember(initialPhone) { mutableStateOf(initialPhone) }
     var body by remember(initialBody) { mutableStateOf(initialBody) }
     var validationError by remember { mutableStateOf<String?>(null) }
@@ -286,7 +293,10 @@ internal fun SmsSettingsSheet(
     onSave: (enabled: Boolean, smscNumber: String, maxSize: Int) -> Unit
 ) {
     val spacing = AirtelTheme.spacing
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var smsEnabled by remember(settings) { mutableStateOf(settings.smsEnabled) }
     var smscNumber by remember(settings) { mutableStateOf(settings.smscNumber) }
     var maxSizeText by remember(settings) { mutableStateOf(settings.maxSize.toString()) }

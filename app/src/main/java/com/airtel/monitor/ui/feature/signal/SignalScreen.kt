@@ -230,17 +230,23 @@ fun SignalScreen(
 
         item(key = "signal_history") {
             val pts = uiState.signalHistory
-            val rsrpSeries = buildList {
-                val r4 = pts.mapNotNull { it.rsrp4g }
-                val r5 = pts.mapNotNull { it.rsrp5g }
-                if (r4.size >= 2) add(LineChartSeries(r4, MaterialTheme.colorScheme.primary, fillArea = true))
-                if (r5.size >= 2) add(LineChartSeries(r5, MaterialTheme.colorScheme.tertiary, fillArea = false))
+            val primaryColor = MaterialTheme.colorScheme.primary
+            val tertiaryColor = MaterialTheme.colorScheme.tertiary
+            val rsrpSeries = remember(pts, primaryColor, tertiaryColor) {
+                buildList {
+                    val r4 = pts.mapNotNull { it.rsrp4g }
+                    val r5 = pts.mapNotNull { it.rsrp5g }
+                    if (r4.size >= 2) add(LineChartSeries(r4, primaryColor, fillArea = true))
+                    if (r5.size >= 2) add(LineChartSeries(r5, tertiaryColor, fillArea = false))
+                }
             }
-            val sinrSeries = buildList {
-                val s4 = pts.mapNotNull { it.sinr4g }
-                val s5 = pts.mapNotNull { it.sinr5g }
-                if (s4.size >= 2) add(LineChartSeries(s4, colors.success, fillArea = true))
-                if (s5.size >= 2) add(LineChartSeries(s5, colors.info, fillArea = false))
+            val sinrSeries = remember(pts, colors.success, colors.info) {
+                buildList {
+                    val s4 = pts.mapNotNull { it.sinr4g }
+                    val s5 = pts.mapNotNull { it.sinr5g }
+                    if (s4.size >= 2) add(LineChartSeries(s4, colors.success, fillArea = true))
+                    if (s5.size >= 2) add(LineChartSeries(s5, colors.info, fillArea = false))
+                }
             }
 
             SectionCard(

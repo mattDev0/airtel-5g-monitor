@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -55,11 +56,12 @@ fun SignalQualityBand.label(): String = when (this) {
 @Composable
 fun SignalBars(
     level: Int,
-    maxBars: Int = 5,
     modifier: Modifier = Modifier,
+    maxBars: Int = 5,
     activeColor: Color = MaterialTheme.colorScheme.primary
 ) {
-    val desc = stringResource(R.string.cd_signal_bars, level.coerceIn(0, maxBars), maxBars)
+    val safeLevel = level.coerceIn(0, maxBars)
+    val desc = pluralStringResource(R.plurals.cd_signal_bars, maxBars, safeLevel, maxBars)
     Row(
         modifier = modifier
             .height(15.dp)

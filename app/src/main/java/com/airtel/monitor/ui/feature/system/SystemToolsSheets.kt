@@ -39,10 +39,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,7 +73,10 @@ fun ScheduledRebootSheet(
 ) {
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var enabled by remember(current) { mutableStateOf(current?.enabled ?: false) }
     var hourText by remember(current) { mutableStateOf((current?.hour ?: 3).toString().padStart(2, '0')) }
     var minuteText by remember(current) { mutableStateOf((current?.minute ?: 0).toString().padStart(2, '0')) }
@@ -226,7 +230,10 @@ fun SystemLogsSheet(
 ) {
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var grade by remember(logSettings) { mutableStateOf(logSettings?.grade ?: LogGrade.DEFAULT) }
     var sizeKb by remember(logSettings) { mutableStateOf((logSettings?.sizeKb ?: 500).toString()) }
     var localError by remember { mutableStateOf<String?>(null) }
@@ -376,7 +383,10 @@ fun ChangePasswordSheet(
 ) {
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var oldPass by remember { mutableStateOf("") }
     var newPass by remember { mutableStateOf("") }
     var confirmPass by remember { mutableStateOf("") }

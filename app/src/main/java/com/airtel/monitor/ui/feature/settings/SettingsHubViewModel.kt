@@ -714,7 +714,6 @@ class SettingsHubViewModel internal constructor(
 
     override fun onCleared() {
         diagnosisJob?.cancel()
-        super.onCleared()
     }
 
     private fun buildNetworkModeSummary(router: RouterState): String {

@@ -32,22 +32,22 @@ import com.airtel.monitor.data.model.CellularMetrics
 import com.airtel.monitor.data.model.HardwareMetrics
 import com.airtel.monitor.domain.CarrierComponent
 import com.airtel.monitor.domain.CarrierTech
-import com.airtel.monitor.ui.theme.StatusSuccess
-import com.airtel.monitor.ui.theme.StatusWarning
+import com.airtel.monitor.ui.theme.AirtelTheme
 
 @Composable
 fun CellularCellLockCard(
     cellLock: CellLockInfo,
     cellular: CellularMetrics,
+    modifier: Modifier = Modifier,
     carriers: List<CarrierComponent> = emptyList(),
     hardware: HardwareMetrics? = null,
     onEditLocks: (() -> Unit)? = null,
     networkBusy: Boolean = false,
     onMobileData: ((Boolean) -> Unit)? = null,
     onFlightMode: ((Boolean) -> Unit)? = null,
-    onRescan: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onRescan: (() -> Unit)? = null
 ) {
+    val semantic = AirtelTheme.colors
     var isExpanded by remember { mutableStateOf(false) }
     // Actions that cut the connection wait for a confirmation.
     var pending by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
@@ -152,7 +152,7 @@ fun CellularCellLockCard(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(if (isLocked) StatusWarning else StatusSuccess)
+                            .background(if (isLocked) semantic.warning else semantic.success)
                     )
                     Text(
                         text = if (isLocked) "Cell Lock Active" else "Cell Lock: Auto (Default)",

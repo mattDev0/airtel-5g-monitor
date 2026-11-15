@@ -36,8 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airtel.monitor.data.model.DiagnosisMode
 import com.airtel.monitor.data.model.DiagnosisState
-import com.airtel.monitor.ui.theme.StatusError
-import com.airtel.monitor.ui.theme.StatusSuccess
+import com.airtel.monitor.ui.theme.AirtelTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +52,7 @@ fun NetworkDiagnosisCard(
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val semantic = AirtelTheme.colors
     val terminalScrollState = rememberScrollState()
 
     // Follow new output only while the user is at the bottom. Snapping to the
@@ -133,7 +133,7 @@ fun NetworkDiagnosisCard(
                 Surface(
                     shape = CircleShape,
                     color = if (diagnosisState.isRunning) {
-                        StatusSuccess.copy(alpha = 0.15f)
+                        semantic.success.copy(alpha = 0.15f)
                     } else {
                         MaterialTheme.colorScheme.surfaceContainerHighest
                     }
@@ -146,12 +146,12 @@ fun NetworkDiagnosisCard(
                         if (diagnosisState.isRunning) {
                             LoadingIndicator(
                                 modifier = Modifier.size(16.dp),
-                                color = StatusSuccess
+                                color = semantic.success
                             )
                         }
                         Text(
                             text = if (diagnosisState.isRunning) "Running" else "Ready",
-                            color = if (diagnosisState.isRunning) StatusSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (diagnosisState.isRunning) semantic.success else MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -271,7 +271,7 @@ fun NetworkDiagnosisCard(
             diagnosisState.error?.let { err ->
                 Text(
                     text = err,
-                    color = StatusError,
+                    color = semantic.error,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace
                 )
@@ -363,9 +363,9 @@ fun NetworkDiagnosisCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(StatusError.copy(alpha = 0.7f)))
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(semantic.error.copy(alpha = 0.7f)))
                             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant))
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(StatusSuccess.copy(alpha = 0.7f)))
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(semantic.success.copy(alpha = 0.7f)))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (diagnosisState.mode == DiagnosisMode.PING) "PING CONSOLE" else "TRACEROUTE CONSOLE",

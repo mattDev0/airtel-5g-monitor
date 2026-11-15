@@ -15,7 +15,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airtel.monitor.data.model.DeviceItem
-import com.airtel.monitor.ui.theme.StatusError
+import com.airtel.monitor.ui.theme.AirtelTheme
+import java.util.Locale
 
 @Composable
 fun RenameDeviceDialog(
@@ -84,13 +85,14 @@ fun RebootConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    val semantic = AirtelTheme.colors
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
-                tint = StatusError,
+                tint = semantic.error,
                 modifier = Modifier.size(28.dp)
             )
         },
@@ -114,7 +116,7 @@ fun RebootConfirmDialog(
                 onClick = onConfirm,
                 shapes = ButtonDefaults.shapes(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = StatusError,
+                    containerColor = semantic.error,
                     contentColor = MaterialTheme.colorScheme.onError
                 )
             ) {
@@ -211,7 +213,7 @@ fun SettingsDialog(
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Poll Rate: ${String.format("%.1f", interval)}s",
+                        text = "Poll Rate: ${String.format(Locale.US, "%.1f", interval)}s",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

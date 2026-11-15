@@ -1,5 +1,6 @@
 package com.airtel.monitor.data.model
 
+import androidx.compose.runtime.Immutable
 import com.airtel.monitor.data.dto.NetworkModeSnapshot
 import com.airtel.monitor.domain.CarrierComponent
 import com.airtel.monitor.domain.CellIdentity
@@ -43,6 +44,7 @@ enum class ConnectionStatus {
     DISCONNECTED
 }
 
+@Immutable
 data class WanMetrics(
     val downloadKbps: Double = 0.0,
     val uploadKbps: Double = 0.0,
@@ -55,6 +57,7 @@ data class WanMetrics(
     val peakUlMbps: Double = 0.0
 )
 
+@Immutable
 data class CellularMetrics(
     val networkType: String = "-",
     val signalLvl: Int = 0,
@@ -103,6 +106,7 @@ data class HardwareMetrics(
     val memory: String = "--"
 )
 
+@Immutable
 data class DeviceItem(
     val mac: String,
     val ip: String,
@@ -162,6 +166,7 @@ data class DiagnosisState(
     val error: String? = null
 )
 
+@Immutable
 data class RouterState(
     val timestamp: Long = System.currentTimeMillis(),
     val timeFormatted: String = "",

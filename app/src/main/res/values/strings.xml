@@ -40,7 +40,10 @@
     <string name="signal_quality_fair">Fair</string>
     <string name="signal_quality_poor">Poor</string>
     <string name="signal_quality_unknown">--</string>
-    <string name="cd_signal_bars">Signal strength %1$d of %2$d bars</string>
+    <plurals name="cd_signal_bars">
+        <item quantity="one">Signal strength %1$d of %2$d bar</item>
+        <item quantity="other">Signal strength %1$d of %2$d bars</item>
+    </plurals>
     <string name="carrier_role_pcc">PCC</string>
     <string name="carrier_role_pscell">PSCell</string>
     <string name="carrier_role_scc">SCC</string>
@@ -61,9 +64,13 @@
     <!-- Signal tab (Phase 0 preview) -->
     <string name="signal_carriers_title">Serving Carriers</string>
     <string name="signal_carriers_empty">Waiting for serving cell details from router</string>
-    <string name="signal_manage_locks">Manage Band &amp; Cell Lock</string>
 
     <!-- Home screen (Phase 1) -->
+    <string name="home_speed_title">Internet Speed</string>
+    <string name="home_speed_total_fmt">Total: %1$s MB</string>
+    <string name="home_speed_download">Download</string>
+    <string name="home_speed_upload">Upload</string>
+    <string name="home_speed_kbps_fmt">%1$s kB/s</string>
     <string name="home_online_duration">Online</string>
     <string name="home_wan_ip">WAN IP</string>
     <string name="home_cell_tile">Cell</string>
@@ -72,7 +79,10 @@
     <string name="home_usage_title">Monthly Data Usage</string>
     <string name="home_usage_used_fmt">%1$s used</string>
     <string name="home_usage_limit_fmt">%1$s / %2$s limit</string>
-    <string name="home_usage_days_left_fmt">%1$d days left in cycle</string>
+    <plurals name="home_usage_days_left_fmt">
+        <item quantity="one">%1$d day left in cycle</item>
+        <item quantity="other">%1$d days left in cycle</item>
+    </plurals>
     <string name="home_usage_no_limit">No monthly limit configured</string>
     <string name="home_usage_set_limit">View usage</string>
     <string name="home_usage_cycle_day_fmt">Cycle starts day %1$d</string>
@@ -92,7 +102,10 @@
     <string name="home_tiles_title">At a Glance</string>
     <string name="tile_devices_online">Devices Online</string>
     <string name="tile_messages">Messages</string>
-    <string name="tile_messages_unread_fmt">%1$d unread</string>
+    <plurals name="tile_messages_unread_fmt">
+        <item quantity="one">%1$d unread</item>
+        <item quantity="other">%1$d unread</item>
+    </plurals>
     <string name="tile_messages_none">No unread</string>
     <string name="tile_temp_cpu">Temp &amp; CPU</string>
     <string name="tile_uptime">Router Uptime</string>

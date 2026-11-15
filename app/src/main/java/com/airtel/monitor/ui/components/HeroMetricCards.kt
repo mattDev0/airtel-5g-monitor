@@ -11,14 +11,17 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airtel.monitor.R
 import com.airtel.monitor.core.datastore.SpeedUnitPreference
 import com.airtel.monitor.core.util.NetworkFormatters
 import com.airtel.monitor.data.model.BandwidthPoint
@@ -27,6 +30,9 @@ import com.airtel.monitor.data.model.HardwareMetrics
 import com.airtel.monitor.data.model.WanMetrics
 import com.airtel.monitor.ui.designsystem.Sparkline
 import com.airtel.monitor.ui.theme.AirtelTheme
+import java.util.Locale
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 
 @Composable
 fun MinimalWanSpeedCard(
@@ -60,20 +66,20 @@ fun MinimalWanSpeedCard(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header Row: Label & Session Total
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Internet Speed",
+                    text = stringResource(R.string.home_speed_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = "Total: ${wan.totalFlowMb} MB",
+                    text = stringResource(R.string.home_speed_total_fmt, wan.totalFlowMb),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace
@@ -87,7 +93,7 @@ fun MinimalWanSpeedCard(
             ) {
                 // Download Column
                 SpeedMetricColumn(
-                    label = "Download",
+                    label = stringResource(R.string.home_speed_download),
                     speedMbps = wan.downloadMbps,
                     speedKbps = wan.downloadKbps,
                     peakMbps = wan.peakDlMbps,
@@ -107,7 +113,7 @@ fun MinimalWanSpeedCard(
 
                 // Upload Column
                 SpeedMetricColumn(
-                    label = "Upload",
+                    label = stringResource(R.string.home_speed_upload),
                     speedMbps = wan.uploadMbps,
                     speedKbps = wan.uploadKbps,
                     peakMbps = wan.peakUlMbps,
@@ -141,10 +147,12 @@ fun MinimalWanSpeedCard(
                         }
                     }
                 }
+                val dlValues = remember(history) { history.map { it.downloadMbps.toFloat() } }
+                val ulValues = remember(history) { history.map { it.uploadMbps.toFloat() } }
                 Sparkline(
-                    values = history.map { it.downloadMbps.toFloat() },
+                    values = dlValues,
                     lineColor = colors.downloadSeries,
-                    secondaryValues = history.map { it.uploadMbps.toFloat() },
+                    secondaryValues = ulValues,
                     secondaryColor = colors.uploadSeries,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -230,13 +238,14 @@ private fun SpeedMetricColumn(
             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
 
-        // Subtext: KB/s & Peak
-        Row(
+        // Subtext: kB/s & Peak (wraps cleanly at 200% font scale)
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = "${String.format("%.0f", speedKbps)} kB/s",
+                text = stringResource(R.string.home_speed_kbps_fmt, String.format(Locale.US, "%.0f", speedKbps)),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 fontFamily = FontFamily.Monospace

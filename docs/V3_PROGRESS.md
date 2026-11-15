@@ -274,3 +274,33 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 ### Untested on Device / Live Router
 - End-to-end WorkManager 15-minute periodic trigger, `POST_NOTIFICATIONS` runtime prompt on Android 13+ device, and home-screen widget pinning / tap-to-refresh on a physical launcher.
 - Live router onboarding probe against physical ZLT X17M/W304VA PRO gateway IP.
+
+---
+
+## Phase 7 — Polish, Accessibility, Light Theme & R8 Check
+
+**Status:** Complete for Android V3 (`Phases 0–7` verified on `v3-rebuild` with zero compiler deprecation warnings, zero lint errors, R8 release shrinking passing cleanly, and `README.md` updated; `Phase 8` iOS parity waits on Android review)
+
+### Implemented
+- **Light Theme Contrast & System Bars (`Theme.kt`, `NetworkDiagnosisCard.kt`, `CellularCellLockCard.kt`, `Dialogs.kt`):**
+  - Migrated remaining legacy dark-only `StatusSuccess` / `StatusWarning` / `StatusError` references in components/dialogs to `AirtelTheme.colors` (`success` / `warning` / `error`) so light-theme surfaces meet AA contrast.
+  - Added a `SideEffect` inside `AirtelMonitorTheme` updating `WindowCompat.getInsetsController` `isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars` when users switch Appearance between System, Light, and Dark inside the app.
+- **200% Font Scale, Predictive Back, Plurals & Tablet Adaptive Layout (`AppShell.kt`, `HeroMetricCards.kt`, `HomeScreen.kt`, `DataUsageScreen.kt`, `MessagesScreen.kt`, `SignalMeter.kt`, `AndroidManifest.xml`, `strings.xml`, `colors.xml`):**
+  - Replaced `currentWindowAdaptiveInfo()` with `currentWindowAdaptiveInfoV2()` in `AppShell.kt` and bounded wide tablet content columns (`widthIn(max = 880.dp)`) when rendering `NavigationRail` / `NavigationDrawer`.
+  - Enabled `android:enableOnBackInvokedCallback="true"` (`tools:targetApi="tiramisu"`) in `AndroidManifest.xml` for predictive back gestures.
+  - Replaced `rememberModalBottomSheetState(skipPartiallyExpanded = true)` across `ConfirmSheet.kt`, `DeviceDetailSheet.kt`, `MessagesSheets.kt`, `SettingsSheets.kt`, and `SystemToolsSheets.kt` with non-deprecated `rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))`.
+  - Wrapped `MinimalWanSpeedCard` headers/footers in `FlowRow`, bounded `ConnectionHeroCard` stat tiles with `widthIn(min = 96.dp)`, moved hardcoded speed-card labels to `strings.xml`, converted `cd_signal_bars` / `home_usage_days_left_fmt` / `tile_messages_unread_fmt` to `<plurals>`, and removed unused `colors.xml` / `strings.xml` entries.
+  - Eliminated all `ModifierParameter`, `DefaultLocale`, `EmptySuperCall`, `PluralsCandidate`, and `UnusedResources` findings across Android source/resources.
+- **Recomposition Performance & R8 Release Verification (`RouterModels.kt`, `HomeViewModel.kt`, `SignalViewModel.kt`, `DevicesViewModel.kt`, `HomeScreen.kt`, `SignalScreen.kt`, `HeroMetricCards.kt`, `keepRules/rules.keep`):**
+  - Marked `RouterState`, nested metric/device models, and `HomeUiState` / `SignalUiState` / `DevicesUiState` `@Immutable`, passed granular slices instead of full `RouterState` to `ConnectionHeroCard` & `MonthlyDataUsageCard`, and `remember`-cached chart/sparkline list transforms against the 2-second poll tick.
+  - Populated `app/src/main/keepRules/rules.keep` for `@Serializable` Navigation routes, `RouterMonitorWorker`, and widget `AppWidgetProvider`s (`signingConfig` untouched).
+- **Documentation (`README.md`):**
+  - Updated `README.md` for V3 Android capabilities, local verification commands, firmware/uncaptured limits, and `Phase 8` iOS roadmap.
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --console=plain` — **PASSED** (`88` unit tests across `16` test suites: `0` skipped, `0` failures, `0` errors; `compileDebugKotlin` & `compileReleaseKotlin` clean with `0` warnings; `lintDebug` passed with `0` errors and `21` total SARIF findings (`1` non-dependency item: intentional synchronous legacy pref cleanup `commit()` in `AppPreferencesRepository.kt:107`); `lintVitalRelease` & R8 `minifyReleaseWithR8` passed, building `app-debug.apk` and `app-release-unsigned.apk`).
+
+### Untested on Device / Live Router
+- Visual inspection on physical dark/light themes, 200% system font scale, tablet split/rail widths, and Layout Inspector recomposition profiling (headless CLI sandbox has no Android emulator/device or Android Studio).
+- Device screenshots were not recaptured in this CLI environment (`README.md` retains existing screenshots).
+- `Phase 8` iOS SwiftUI parity (`iosApp/`) intentionally not started yet; waits on Android review.

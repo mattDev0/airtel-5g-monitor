@@ -394,7 +394,6 @@ class SystemToolsViewModel(
 
     override fun onCleared() {
         speedTestJob?.cancel()
-        super.onCleared()
     }
 
     companion object {

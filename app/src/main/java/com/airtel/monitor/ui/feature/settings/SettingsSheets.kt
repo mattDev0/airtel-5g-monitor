@@ -38,11 +38,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,7 +94,10 @@ fun WifiBandEditorSheet(
 ) {
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
 
     val preservedWpaType = remember(initialDetail.authenticationType) {
         if (initialDetail.authenticationType == "0") "2" else initialDetail.authenticationType
@@ -323,7 +327,10 @@ fun WifiQrSheet(
     onDismiss: () -> Unit
 ) {
     val spacing = AirtelTheme.spacing
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var selectedBand by remember(bandDetails) {
         mutableStateOf(
             if (bandDetails.band5g.enabled || bandDetails.band5g.ssid.isNotBlank()) {
@@ -517,7 +524,10 @@ fun SimPinSheet(
 ) {
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
 
     var pinInput by remember { mutableStateOf("") }
     var pukInput by remember { mutableStateOf("") }
@@ -812,7 +822,10 @@ fun LanDhcpEditorSheet(
 ) {
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
 
     var lanIp by remember(initialConfig.lanIp) { mutableStateOf(initialConfig.lanIp) }
     var netMask by remember(initialConfig.netMask) { mutableStateOf(initialConfig.netMask) }

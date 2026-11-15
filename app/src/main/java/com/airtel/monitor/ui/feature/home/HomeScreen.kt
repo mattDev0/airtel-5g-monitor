@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,7 +53,10 @@ import com.airtel.monitor.data.dto.formatBandPill
 import com.airtel.monitor.data.dto.formatCaSummary
 import com.airtel.monitor.data.dto.formatCellPill
 import com.airtel.monitor.data.dto.formatDataSizeMb
+import com.airtel.monitor.data.model.CellularMetrics
 import com.airtel.monitor.data.model.RouterState
+import com.airtel.monitor.domain.CarrierComponent
+import com.airtel.monitor.domain.MonthlyUsageSummary
 import com.airtel.monitor.ui.components.LockEditorSheet
 import com.airtel.monitor.ui.components.MinimalWanSpeedCard
 import com.airtel.monitor.ui.designsystem.ConfirmSheet
@@ -113,7 +118,10 @@ fun HomeScreen(
     ) {
         item(key = "connection_hero") {
             ConnectionHeroCard(
-                state = state,
+                cellular = state.cellular,
+                carriers = state.carriers,
+                onlineDurationText = state.onlineDurationText,
+                wanIp = state.wanIp,
                 onOpenSignal = onOpenSignal,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
@@ -132,7 +140,7 @@ fun HomeScreen(
 
         item(key = "data_usage") {
             MonthlyDataUsageCard(
-                state = state,
+                usage = state.monthlyUsage,
                 onClick = onOpenDataUsage
             )
         }
@@ -237,7 +245,11 @@ fun HomeScreen(
                         StatTile(
                             label = stringResource(R.string.tile_messages),
                             value = if (uiState.smsUnreadCount > 0) {
-                                stringResource(R.string.tile_messages_unread_fmt, uiState.smsUnreadCount)
+                                pluralStringResource(
+                                    R.plurals.tile_messages_unread_fmt,
+                                    uiState.smsUnreadCount,
+                                    uiState.smsUnreadCount
+                                )
                             } else {
                                 stringResource(R.string.tile_messages_none)
                             },
@@ -299,15 +311,18 @@ fun HomeScreen(
 
 @Composable
 private fun ConnectionHeroCard(
-    state: RouterState,
+    cellular: CellularMetrics,
+    carriers: List<CarrierComponent>,
+    onlineDurationText: String,
+    wanIp: String,
     onOpenSignal: () -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
     val spacing = AirtelTheme.spacing
-    val caSummary = formatCaSummary(state.carriers)
-    val bandPill = formatBandPill(state.carriers)
-    val cellPill = formatCellPill(state.carriers)
+    val caSummary = remember(carriers) { formatCaSummary(carriers) }
+    val bandPill = remember(carriers) { formatBandPill(carriers) }
+    val cellPill = remember(carriers) { formatCellPill(carriers) }
 
     val pillBaseModifier = Modifier
         .clip(AirtelTheme.shapes.chip)
@@ -339,7 +354,7 @@ private fun ConnectionHeroCard(
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
-                        text = state.cellular.networkType.ifEmpty { "--" },
+                        text = cellular.networkType.ifEmpty { "--" },
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -347,13 +362,13 @@ private fun ConnectionHeroCard(
                     )
                 }
                 Text(
-                    text = state.cellular.operator,
+                    text = cellular.operator,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            SignalBars(level = state.cellular.signalLvl, maxBars = 5)
+            SignalBars(level = cellular.signalLvl, maxBars = 5)
         }
 
         Surface(
@@ -377,19 +392,25 @@ private fun ConnectionHeroCard(
         ) {
             StatTile(
                 label = stringResource(R.string.home_online_duration),
-                value = state.onlineDurationText,
-                modifier = Modifier.weight(1f, fill = true)
+                value = onlineDurationText,
+                modifier = Modifier
+                    .widthIn(min = 96.dp)
+                    .weight(1f)
             )
             StatTile(
                 label = stringResource(R.string.home_wan_ip),
-                value = state.wanIp,
-                modifier = Modifier.weight(1f, fill = true)
+                value = wanIp,
+                modifier = Modifier
+                    .widthIn(min = 96.dp)
+                    .weight(1f)
             )
             StatTile(
                 label = stringResource(R.string.home_cell_tile),
                 value = cellPill.removePrefix("PCI ").trim(),
                 onClick = onOpenSignal,
-                modifier = Modifier.weight(1f, fill = true)
+                modifier = Modifier
+                    .widthIn(min = 96.dp)
+                    .weight(1f)
             )
         }
     }
@@ -397,10 +418,9 @@ private fun ConnectionHeroCard(
 
 @Composable
 private fun MonthlyDataUsageCard(
-    state: RouterState,
+    usage: MonthlyUsageSummary,
     onClick: () -> Unit
 ) {
-    val usage = state.monthlyUsage
     val colors = AirtelTheme.colors
     val usedText = usage.usedMb?.let(::formatDataSizeMb) ?: "--"
     val limitText = usage.limitMb?.let(::formatDataSizeMb)
@@ -449,7 +469,13 @@ private fun MonthlyDataUsageCard(
 
         val subtitleParts = buildList {
             if (hasLimit && usage.daysLeftInCycle != null) {
-                add(stringResource(R.string.home_usage_days_left_fmt, usage.daysLeftInCycle))
+                add(
+                    pluralStringResource(
+                        R.plurals.home_usage_days_left_fmt,
+                        usage.daysLeftInCycle,
+                        usage.daysLeftInCycle
+                    )
+                )
             } else if (!hasLimit) {
                 add(stringResource(R.string.home_usage_no_limit))
             }

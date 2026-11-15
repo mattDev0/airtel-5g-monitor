@@ -1,5 +1,6 @@
 package com.airtel.monitor.ui.feature.devices
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@Immutable
 data class DevicesUiState(
     val filteredDevices: List<DeviceItem> = emptyList(),
     val totalCount: Int = 0,

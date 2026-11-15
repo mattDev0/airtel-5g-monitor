@@ -1,5 +1,6 @@
 package com.airtel.monitor.ui.feature.signal
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@Immutable
 data class SignalUiState(
     val routerState: RouterState? = null,
     val lockSettings: LockSettings? = null,
@@ -274,7 +276,6 @@ class SignalViewModel(
 
     override fun onCleared() {
         exitAlignmentMode()
-        super.onCleared()
     }
 
     private data class LocalSignalState(

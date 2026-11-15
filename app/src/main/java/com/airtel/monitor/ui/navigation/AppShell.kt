@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.WifiOff
@@ -33,7 +34,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
@@ -143,7 +144,7 @@ fun AppShell(
     }
 
     val adaptiveLayoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(
-        currentWindowAdaptiveInfo()
+        currentWindowAdaptiveInfoV2()
     )
     val useFloatingBottomBar = !isAlignmentFullScreen && adaptiveLayoutType == NavigationSuiteType.NavigationBar
     val suiteLayoutType = if (isAlignmentFullScreen || useFloatingBottomBar) {
@@ -184,9 +185,18 @@ fun AppShell(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                val contentColumnModifier = if (useFloatingBottomBar || isAlignmentFullScreen) {
+                    Modifier.fillMaxSize()
+                } else {
+                    // Constrain readable content width when running with a tablet navigation rail or drawer.
+                    Modifier
+                        .widthIn(max = 880.dp)
+                        .fillMaxSize()
+                }
+                Column(modifier = contentColumnModifier) {
                     if (!isAlignmentFullScreen) {
                         HeaderBar(
                             connectionStatus = shellState.connectionStatus,

@@ -52,26 +52,24 @@ This rewrites `mobile/airtel_monitor.py` (binds `0.0.0.0`). The Android and iOS
 apps don't use it; they reimplement the client natively.
 
 ## What works and what doesn't (this firmware)
-- ✅ Live **total** WAN download/upload (from the router's `cmd 18` byte counters).
-- ✅ Device list, Wi-Fi PHY link rates, signal, rename (local aliases).
-- ✅ Router **reboot**.
-- ✅ **LAN DNS** — view and set the primary/secondary DNS the router hands to
-  devices (`cmd 3`). The stock UI hides the secondary field; the app echoes the
-  full LAN record on save so nothing else changes, and reads it back to confirm.
+- ✅ Live **total** WAN download/upload (`cmd 18` byte counters, `Mbps` or `MB/s` units).
+- ✅ Device list, OUI vendor lookup, custom aliases, detail sheet, static DHCP lease, and Wi-Fi ACL block/unblock.
+- ✅ Full **5G / 4G RF telemetry**, LTE + NR Carrier Aggregation table, Antenna Alignment audio/visual mode, and neighbor scan.
+- ✅ **Wi-Fi management** (2.4 GHz / 5 GHz radios, QR code share, scheduler, MAC filter, guest Wi-Fi, WPS), **Mobile network / APN / SIM PIN**, and **LAN / DHCP / DNS** (`cmd 3`).
+- ✅ **SMS Inbox / Outbox** (read, compose, reply, forward, delete, SMS settings) & **Monthly / local daily data usage**.
+- ✅ **Security & System Tools**: firewall / ALG switches, syslog viewer, scheduled reboot, self-check, router password change (`cmd 102`), router reboot, and Cloudflare speed test.
+- ✅ **Onboarding, WorkManager alerts & Home-screen widgets**: Wi-Fi gateway auto-detection, deduplicated quota/SMS/device/reachability alerts, and 2×2 / 4×2 status widgets.
+- ✅ **Band lock & cell lock** (Android) — choose allowed 4G/5G bands (`cmd 161`) and lock to specific 4G/5G cells by EARFCN/ARFCN + PCI (`cmd 160`) with `root` login.
 - ❌ **Per-device** throughput — not exposed by the firmware (no per-client counters).
-- ✅ **Band lock & cell lock** (Android) — choose allowed 4G/5G bands (`cmd 161`) and
-  lock to specific 4G/5G cells by EARFCN/ARFCN + PCI (`cmd 160`), like the web UI's
-  Advanced Settings (needs the `root` login).
-- ❌ **QoS speed limiter** — the router blocks it for this account (`LIMITED_ACCESS`).
+- ❌ **QoS speed limiter** & uncaptured second-hop web UI pages (`USSD`, traffic limit setter, remote traffic stats tables, `dmz`/`upnp`/`ddos`/port/URL/IP filter) — blocked or not present in captured router pages.
 
 ## Android
-Native Kotlin + Jetpack Compose, targets **Android 17 (SDK 37)**, min Android 7.0.
-Build steps: **`docs/ANDROID_BUILD.md`**. Architecture and the Android 16+
-`ACCESS_LOCAL_NETWORK` permission: **`docs/ANDROID_NOTES.md`**.
+Native Kotlin + Jetpack Compose (`Material 3 Expressive`, light/dark theme tokens, adaptive phone/tablet nav, predictive back), targets **Android 17 (SDK 37)**, min Android 7.0 (`minSdk 24`).
+Encrypted DataStore (`AndroidKeystore` AES-GCM) stores router credentials locally. Verify builds with `sh ./gradlew testDebugUnitTest lintDebug assembleDebug`.
+Build steps: **`docs/ANDROID_BUILD.md`**. Architecture and the Android 16+ `ACCESS_LOCAL_NETWORK` permission: **`docs/ANDROID_NOTES.md`**. V3 rebuild log: **`docs/V3_PROGRESS.md`**.
 
 ## iOS
-Native SwiftUI, iOS 16+. Built unsigned by GitHub Actions (no Mac needed); install
-steps in **`docs/IOS_BUILD.md`**.
+Native SwiftUI, iOS 16+. Built unsigned by GitHub Actions (no Mac needed); install steps in **`docs/IOS_BUILD.md`**. iOS V3 parity (`Phase 8`) is scheduled after Android review.
 
 ## Note
 Uses the router's default LAN credentials (`root`/`admin`), changeable in the app
