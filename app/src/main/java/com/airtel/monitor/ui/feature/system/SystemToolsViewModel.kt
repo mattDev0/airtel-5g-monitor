@@ -1,5 +1,10 @@
 package com.airtel.monitor.ui.feature.system
 
+import com.airtel.monitor.data.model.RouterFeatureFlags
+import com.airtel.monitor.data.model.RouterTimeConfig
+import com.airtel.monitor.data.model.WanLinkDetectConfig
+import kotlinx.coroutines.flow.flowOf
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -36,7 +41,9 @@ import kotlinx.coroutines.withContext
 enum class ActiveSystemSheet {
     SCHEDULED_REBOOT,
     LOGS,
-    CHANGE_PASSWORD
+    CHANGE_PASSWORD,
+    ROUTER_TIME,
+    WAN_LINK_DETECT
 }
 
 data class SystemToolsUiState(
@@ -60,6 +67,11 @@ data class SystemToolsUiState(
     val passwordSaving: Boolean = false,
     val passwordError: String? = null,
     val speedTest: SpeedTestProgress = SpeedTestProgress(),
+    val timeConfig: RouterTimeConfig? = null,
+    val wanDetectConfig: WanLinkDetectConfig? = null,
+    val featureFlags: RouterFeatureFlags = RouterFeatureFlags(),
+    val sheetBusy: Boolean = false,
+    val sheetError: String? = null,
     val activeSheet: ActiveSystemSheet? = null
 )
 
@@ -69,6 +81,8 @@ class SystemToolsViewModel(
     private val updateSavedPassword: (String) -> Unit,
     private val routerSession: RouterSession,
     private val speedTestRunner: SpeedTestRunner,
+    private val featureFlagsFlow: Flow<RouterFeatureFlags> = flowOf(RouterFeatureFlags()),
+    private val ensureFlagsLoaded: suspend () -> RouterFeatureFlags = { RouterFeatureFlags() },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val onStatusMessage: (String) -> Unit,
     private val onForcePollRefresh: () -> Unit
@@ -90,6 +104,11 @@ class SystemToolsViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            featureFlagsFlow.collect { flags ->
+                _uiState.update { it.copy(featureFlags = flags) }
+            }
+        }
         refreshAll()
     }
 
@@ -104,6 +123,7 @@ class SystemToolsViewModel(
                     systemRepository.loadLogSettings()
                 )
             }
+            val flags = withContext(ioDispatcher) { ensureFlagsLoaded() }
             @Suppress("UNCHECKED_CAST")
             val typedAbout = aboutRes as RouterResult<AboutRouterInfo>
             @Suppress("UNCHECKED_CAST")
@@ -123,6 +143,7 @@ class SystemToolsViewModel(
                 state.copy(
                     isLoading = false,
                     errorMessage = primaryError,
+                    featureFlags = flags,
                     aboutInfo = (typedAbout as? RouterResult.Ok)?.data ?: state.aboutInfo,
                     routerTime = (typedTime as? RouterResult.Ok)?.data ?: state.routerTime,
                     scheduledReboot = (typedSchedule as? RouterResult.Ok)?.data ?: state.scheduledReboot,
@@ -144,14 +165,17 @@ class SystemToolsViewModel(
     }
 
     fun openSheet(sheet: ActiveSystemSheet) {
-        _uiState.update { it.copy(activeSheet = sheet, passwordError = null, logsError = null) }
-        if (sheet == ActiveSystemSheet.LOGS) {
-            loadSysLog()
+        _uiState.update { it.copy(activeSheet = sheet, passwordError = null, logsError = null, sheetError = null) }
+        when (sheet) {
+            ActiveSystemSheet.LOGS -> loadSysLog()
+            ActiveSystemSheet.ROUTER_TIME -> loadRouterTimeConfig()
+            ActiveSystemSheet.WAN_LINK_DETECT -> loadWanLinkDetect()
+            else -> Unit
         }
     }
 
     fun dismissSheet() {
-        _uiState.update { it.copy(activeSheet = null, passwordError = null, logsError = null) }
+        _uiState.update { it.copy(activeSheet = null, passwordError = null, logsError = null, sheetError = null) }
     }
 
     fun runSelfCheck() {
@@ -313,6 +337,117 @@ class SystemToolsViewModel(
         }
     }
 
+    fun loadRouterTimeConfig() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(sheetBusy = true, sheetError = null) }
+            val res = withContext(ioDispatcher) { systemRepository.loadRouterTimeConfig() }
+            when (res) {
+                is RouterResult.Ok -> _uiState.update {
+                    it.copy(sheetBusy = false, timeConfig = res.data, routerTime = res.data.systemTime.ifBlank { it.routerTime })
+                }
+                else -> _uiState.update { it.copy(sheetBusy = false, sheetError = res.errorMessage()) }
+            }
+        }
+    }
+
+    fun saveRouterTimeConfig(config: RouterTimeConfig, manualDateTime: String) {
+        if (_uiState.value.sheetBusy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(sheetBusy = true, sheetError = null) }
+            val res = withContext(ioDispatcher) {
+                systemRepository.saveRouterTimeConfig(config, manualDateTime)
+            }
+            when (res) {
+                is RouterResult.Ok -> {
+                    _uiState.update {
+                        it.copy(
+                            sheetBusy = false,
+                            timeConfig = res.data,
+                            routerTime = res.data.systemTime.ifBlank { it.routerTime },
+                            activeSheet = null
+                        )
+                    }
+                    onStatusMessage("Time and NTP settings saved")
+                }
+                else -> _uiState.update { it.copy(sheetBusy = false, sheetError = res.errorMessage()) }
+            }
+        }
+    }
+
+    fun syncClientTime(clientTime: String) {
+        if (_uiState.value.sheetBusy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(sheetBusy = true, sheetError = null) }
+            val res = withContext(ioDispatcher) { systemRepository.syncClientTime(clientTime) }
+            when (res) {
+                is RouterResult.Ok -> {
+                    val refreshed = withContext(ioDispatcher) { systemRepository.loadRouterTimeConfig() }
+                    _uiState.update { state ->
+                        val nextCfg = (refreshed as? RouterResult.Ok)?.data ?: state.timeConfig
+                        state.copy(
+                            sheetBusy = false,
+                            timeConfig = nextCfg,
+                            routerTime = nextCfg?.systemTime?.ifBlank { clientTime } ?: clientTime
+                        )
+                    }
+                    onStatusMessage("Router clock synced to phone")
+                }
+                else -> _uiState.update { it.copy(sheetBusy = false, sheetError = res.errorMessage()) }
+            }
+        }
+    }
+
+    fun loadWanLinkDetect() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(sheetBusy = true, sheetError = null) }
+            val flags = ensureFlagsLoaded()
+            val res = withContext(ioDispatcher) { systemRepository.loadWanLinkDetect() }
+            when (res) {
+                is RouterResult.Ok -> _uiState.update {
+                    it.copy(sheetBusy = false, wanDetectConfig = res.data, featureFlags = flags)
+                }
+                else -> _uiState.update { it.copy(sheetBusy = false, sheetError = res.errorMessage(), featureFlags = flags) }
+            }
+        }
+    }
+
+    fun saveWanLinkDetect(config: WanLinkDetectConfig) {
+        if (_uiState.value.sheetBusy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(sheetBusy = true, sheetError = null) }
+            val rescanAllowed = _uiState.value.featureFlags.wanDetectRescanAvailable
+            val res = withContext(ioDispatcher) { systemRepository.saveWanLinkDetect(config, rescanAllowed) }
+            when (res) {
+                is RouterResult.Ok -> {
+                    _uiState.update {
+                        it.copy(sheetBusy = false, wanDetectConfig = res.data, activeSheet = null)
+                    }
+                    onStatusMessage("WAN link detection settings saved")
+                }
+                else -> _uiState.update { it.copy(sheetBusy = false, sheetError = res.errorMessage()) }
+            }
+        }
+    }
+
+    fun factoryReset() {
+        if (_uiState.value.sheetBusy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(sheetBusy = true, sheetError = null) }
+            val res = withContext(ioDispatcher) { systemRepository.factoryReset() }
+            when (res) {
+                is RouterResult.Ok -> {
+                    routerSession.resetSession()
+                    _uiState.update { it.copy(sheetBusy = false) }
+                    onStatusMessage("Factory reset initiated — router is restarting")
+                }
+                else -> {
+                    _uiState.update { it.copy(sheetBusy = false) }
+                    onStatusMessage(res.errorMessage())
+                }
+            }
+        }
+    }
+
     fun startSpeedTest() {
         if (speedTestJob?.isActive == true) return
         speedTestJob = viewModelScope.launch {
@@ -408,6 +543,11 @@ class SystemToolsViewModel(
                     updateSavedPassword = { newPass -> container.preferencesRepository.updateSettings(pass = newPass) },
                     routerSession = container.routerSession,
                     speedTestRunner = container.speedTestRunner,
+                    featureFlagsFlow = container.featureFlagRepository.flags,
+                    ensureFlagsLoaded = {
+                        (container.featureFlagRepository.ensureLoaded() as? RouterResult.Ok)?.data
+                            ?: container.featureFlagRepository.flags.value
+                    },
                     onStatusMessage = container::emitStatusMessage,
                     onForcePollRefresh = onForcePollRefresh
                 )

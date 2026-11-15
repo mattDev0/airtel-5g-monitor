@@ -19,7 +19,10 @@ data class WriteSpec<T>(
     val writeTimeoutSeconds: Long = 20L,
     val verifyRetries: Int = 1,
     val verifyDelayMs: Long = 0L,
-    val allowEmptyWriteReply: Boolean = false
+    val allowEmptyWriteReply: Boolean = false,
+    val skipPreRead: Boolean = false,
+    val skipVerifyRead: Boolean = false,
+    val postAccepted: (postJson: JSONObject) -> Boolean = { false }
 )
 
 /**
@@ -30,13 +33,17 @@ class SettingsWriter(
     private val delayFn: suspend (Long) -> Unit = { delay(it) }
 ) {
     suspend fun <T> write(spec: WriteSpec<T>): RouterResult<T> {
-        val currentRes = session.execute(spec.readCmd, method = "GET", extra = spec.readExtra)
-        val current = when (currentRes) {
-            is RouterResult.Ok -> currentRes.data
-            is RouterResult.NotLoggedIn -> return currentRes
-            is RouterResult.LimitedAccess -> return currentRes
-            is RouterResult.Unreachable -> return currentRes
-            is RouterResult.BadResponse -> return currentRes
+        val current = if (spec.skipPreRead) {
+            JSONObject()
+        } else {
+            val currentRes = session.execute(spec.readCmd, method = "GET", extra = spec.readExtra)
+            when (currentRes) {
+                is RouterResult.Ok -> currentRes.data
+                is RouterResult.NotLoggedIn -> return currentRes
+                is RouterResult.LimitedAccess -> return currentRes
+                is RouterResult.Unreachable -> return currentRes
+                is RouterResult.BadResponse -> return currentRes
+            }
         }
 
         when (val preflightResult = spec.preflight(current)) {
@@ -75,7 +82,12 @@ class SettingsWriter(
 
         if (postJson.length() > 0 || !spec.allowEmptyWriteReply) {
             val msg = postJson.optString("message", "")
-            val rejected = !postJson.optBoolean("success", false) && msg != "0" && msg != "success"
+            val flag = postJson.optString("flag", "")
+            val rejected = !spec.postAccepted(postJson) &&
+                !postJson.optBoolean("success", false) &&
+                msg != "0" &&
+                msg != "success" &&
+                flag != "0"
             if (rejected) {
                 return RouterResult.BadResponse(
                     message = msg.ifEmpty { "Router rejected changes for cmd ${spec.cmd}" },
@@ -86,6 +98,10 @@ class SettingsWriter(
                 @Suppress("UNCHECKED_CAST")
                 return postFailure as RouterResult<T>
             }
+        }
+
+        if (spec.skipVerifyRead) {
+            return RouterResult.Ok(spec.parseResult(postJson))
         }
 
         var lastReadBack: JSONObject? = null
@@ -121,4 +137,16 @@ class SettingsWriter(
             rawBody = postJson.toString()
         )
     }
+
+    /** Commits staged firewall, DHCP IP-MAC, or parental control tables (`cmd 20 APPLY_FILTER`). */
+    suspend fun applyFilter(): RouterResult<Unit> = write(
+        WriteSpec(
+            cmd = 20,
+            skipPreRead = true,
+            skipVerifyRead = true,
+            buildPayload = { emptyMap() },
+            verify = { true },
+            parseResult = {}
+        )
+    )
 }

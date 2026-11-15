@@ -5,13 +5,17 @@
 
 package com.airtel.monitor.ui.feature.messages
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,12 +23,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -39,12 +47,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.airtel.monitor.R
+import com.airtel.monitor.core.util.Phase71Validators
 import com.airtel.monitor.core.util.SmsValidators
 import com.airtel.monitor.data.model.SmsFolder
 import com.airtel.monitor.data.model.SmsMessage
@@ -405,6 +415,243 @@ internal fun SmsSettingsSheet(
                 ) {
                     Text(stringResource(R.string.action_save))
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun UssdDialerSheet(
+    isBusy: Boolean,
+    responseText: String,
+    needReply: Boolean,
+    errorMessage: String?,
+    shortcuts: List<String>,
+    onDismiss: () -> Unit,
+    onSendUssd: (codeOrReply: String, isReply: Boolean) -> Unit,
+    onSendPreset: (subcmd: String) -> Unit,
+    onCancelSession: () -> Unit,
+    onAddShortcut: (String) -> Unit,
+    onRemoveShortcut: (String) -> Unit
+) {
+    val spacing = AirtelTheme.spacing
+    val colors = AirtelTheme.colors
+    var codeText by remember { mutableStateOf("") }
+    var replyText by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = AirtelTheme.shapes.sheet,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.xl)
+                .padding(bottom = spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(spacing.md)
+        ) {
+            Text(
+                text = stringResource(R.string.messages_ussd_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(R.string.messages_ussd_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            OutlinedTextField(
+                value = codeText,
+                onValueChange = {
+                    codeText = it
+                    validationError = null
+                },
+                label = { Text(stringResource(R.string.messages_ussd_code_label)) },
+                enabled = !isBusy,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth(),
+                shape = AirtelTheme.shapes.input
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm)
+            ) {
+                Button(
+                    onClick = {
+                        val err = Phase71Validators.validateUssdInput(codeText, isReply = false)
+                        if (err != null) {
+                            validationError = err
+                        } else {
+                            onSendUssd(codeText.trim(), false)
+                        }
+                    },
+                    enabled = !isBusy,
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.messages_ussd_dial_btn))
+                }
+                OutlinedButton(
+                    onClick = {
+                        val err = Phase71Validators.validateUssdInput(codeText, isReply = false)
+                        if (err != null) {
+                            validationError = err
+                        } else {
+                            onAddShortcut(codeText.trim())
+                        }
+                    },
+                    enabled = !isBusy && codeText.isNotBlank()
+                ) {
+                    Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(spacing.xs))
+                    Text(stringResource(R.string.messages_ussd_add_shortcut))
+                }
+            }
+
+            if (shortcuts.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.messages_ussd_shortcuts_label),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(spacing.xs)
+                ) {
+                    shortcuts.forEach { shortcut ->
+                        FilterChip(
+                            selected = codeText.trim() == shortcut,
+                            onClick = {
+                                codeText = shortcut
+                                validationError = null
+                                onSendUssd(shortcut, false)
+                            },
+                            enabled = !isBusy,
+                            label = { Text(shortcut, style = TabularMonospace) },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable(enabled = !isBusy) { onRemoveShortcut(shortcut) }
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.messages_ussd_presets_label),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(spacing.xs)
+            ) {
+                listOf("2" to "Preset #1", "3" to "Preset #2", "4" to "Preset #3").forEach { (subcmd, label) ->
+                    FilledTonalButton(
+                        onClick = { onSendPreset(subcmd) },
+                        enabled = !isBusy
+                    ) {
+                        Text(label)
+                    }
+                }
+            }
+
+            if (isBusy) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm)
+                ) {
+                    LoadingIndicator(modifier = Modifier.size(22.dp))
+                    Text(
+                        text = stringResource(R.string.messages_ussd_waiting),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (responseText.isNotBlank()) {
+                Surface(
+                    shape = AirtelTheme.shapes.tile,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = responseText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(spacing.md)
+                    )
+                }
+            }
+
+            if (needReply) {
+                OutlinedTextField(
+                    value = replyText,
+                    onValueChange = {
+                        replyText = it
+                        validationError = null
+                    },
+                    label = { Text(stringResource(R.string.messages_ussd_reply_label)) },
+                    enabled = !isBusy,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = AirtelTheme.shapes.input
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm)
+                ) {
+                    OutlinedButton(
+                        onClick = onCancelSession,
+                        enabled = !isBusy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.messages_ussd_cancel_btn))
+                    }
+                    Button(
+                        onClick = {
+                            val err = Phase71Validators.validateUssdInput(replyText, isReply = true)
+                            if (err != null) {
+                                validationError = err
+                            } else {
+                                onSendUssd(replyText.trim(), true)
+                                replyText = ""
+                            }
+                        },
+                        enabled = !isBusy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.messages_ussd_reply_btn))
+                    }
+                }
+            }
+
+            val shownError = validationError ?: errorMessage
+            if (!shownError.isNullOrBlank()) {
+                Text(
+                    text = shownError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error
+                )
             }
         }
     }

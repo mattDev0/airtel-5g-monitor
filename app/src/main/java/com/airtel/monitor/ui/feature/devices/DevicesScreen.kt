@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
 
 package com.airtel.monitor.ui.feature.devices
 
@@ -10,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,20 +25,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AdminPanelSettings
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Cable
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SignalWifiOff
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +88,10 @@ fun DevicesScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.ensurePoliciesLoaded()
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
@@ -88,6 +103,47 @@ fun DevicesScreen(
                 onSelectPresence = viewModel::setPresenceFilter,
                 onSelectBand = viewModel::setFilter
             )
+        }
+
+        item(key = "fleet_policies") {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(spacing.xs)
+            ) {
+                FilledTonalButton(
+                    onClick = { viewModel.openPolicySheet(DevicePolicySheet.STATIC_LEASES) },
+                    shapes = ButtonDefaults.shapes()
+                ) {
+                    Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "${stringResource(R.string.devices_policy_static_leases)} (${uiState.staticLeases.size})",
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+                FilledTonalButton(
+                    onClick = { viewModel.openPolicySheet(DevicePolicySheet.MAC_FILTER) },
+                    shapes = ButtonDefaults.shapes()
+                ) {
+                    Icon(Icons.Rounded.Block, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "${stringResource(R.string.devices_policy_mac_filter)} (${uiState.macFilter.rules.size})",
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+                if (uiState.featureFlags.parentalControlAvailable) {
+                    OutlinedButton(
+                        onClick = { viewModel.openPolicySheet(DevicePolicySheet.PARENTAL_CONTROL) },
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        Icon(Icons.Rounded.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = stringResource(R.string.devices_policy_parental),
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
+            }
         }
 
         item(key = "fleet_controls") {
@@ -129,6 +185,8 @@ fun DevicesScreen(
             ) { device ->
                 DeviceListRow(
                     device = device,
+                    isReserved = uiState.isMacReserved(device.mac),
+                    isBlocked = uiState.isMacBlocked(device.mac),
                     onClick = { viewModel.selectDevice(device) },
                     onRenameClick = { viewModel.openRenameDialog(device) }
                 )
@@ -142,7 +200,17 @@ fun DevicesScreen(
             onDismiss = viewModel::dismissDetailSheet,
             onCopy = copyToClipboard,
             onRename = { viewModel.openRenameDialog(selected) },
-            onResetAlias = { viewModel.clearAlias(selected) }
+            onResetAlias = { viewModel.clearAlias(selected) },
+            isReserved = uiState.isMacReserved(selected.mac),
+            isBlocked = uiState.isMacBlocked(selected.mac),
+            showParentalButton = uiState.featureFlags.parentalControlAvailable,
+            isPolicySaving = uiState.staticLeasesSaving || uiState.macFilterSaving || uiState.parentalSaving,
+            onReserveStaticIp = { viewModel.reserveStaticIpForDevice(selected) },
+            onToggleBlock = { viewModel.toggleBlockDevice(selected) },
+            onOpenParental = {
+                viewModel.dismissDetailSheet()
+                viewModel.openPolicySheet(DevicePolicySheet.PARENTAL_CONTROL, prefillDevice = selected)
+            }
         )
     }
 
@@ -152,6 +220,48 @@ fun DevicesScreen(
             onDismiss = viewModel::dismissRenameDialog,
             onSave = { alias -> viewModel.saveAlias(target, alias) }
         )
+    }
+
+    when (uiState.activePolicySheet) {
+        DevicePolicySheet.STATIC_LEASES -> StaticLeasesSheet(
+            leases = uiState.staticLeases,
+            prefillIp = uiState.prefillDevice?.ip.orEmpty(),
+            prefillMac = uiState.prefillDevice?.mac.orEmpty(),
+            isLoading = uiState.staticLeasesLoading,
+            isSaving = uiState.staticLeasesSaving,
+            errorMessage = uiState.policyErrorMessage,
+            onRefresh = viewModel::loadStaticLeases,
+            onSave = viewModel::saveStaticLeases,
+            onDismiss = viewModel::dismissPolicySheet
+        )
+        DevicePolicySheet.MAC_FILTER -> MacFilterSheet(
+            snapshot = uiState.macFilter,
+            prefillMac = uiState.prefillDevice?.mac.orEmpty(),
+            prefillRemark = uiState.prefillDevice?.alias.orEmpty(),
+            isLoading = uiState.macFilterLoading,
+            isSaving = uiState.macFilterSaving,
+            errorMessage = uiState.policyErrorMessage,
+            onRefresh = viewModel::loadMacFilter,
+            onSaveRules = viewModel::saveMacFilterRules,
+            onSaveDefaultPolicy = viewModel::saveMacDefaultPolicy,
+            onDismiss = viewModel::dismissPolicySheet
+        )
+        DevicePolicySheet.PARENTAL_CONTROL -> ParentalControlSheet(
+            snapshot = uiState.parental,
+            featureFlags = uiState.featureFlags,
+            prefillIp = uiState.prefillDevice?.ip.orEmpty(),
+            prefillMac = uiState.prefillDevice?.mac.orEmpty(),
+            isLoading = uiState.parentalLoading,
+            isSaving = uiState.parentalSaving,
+            errorMessage = uiState.policyErrorMessage,
+            onRefresh = viewModel::loadParentalControl,
+            onToggleEnabled = viewModel::setParentalEnabled,
+            onSaveSpeedRules = viewModel::saveParentalSpeedRules,
+            onSaveUrlRules = viewModel::saveParentalUrlRules,
+            onSaveTimeRules = viewModel::saveParentalTimeRules,
+            onDismiss = viewModel::dismissPolicySheet
+        )
+        null -> Unit
     }
 }
 
@@ -336,6 +446,8 @@ private fun DeviceFilterAndSortCard(
 @Composable
 private fun DeviceListRow(
     device: DeviceItem,
+    isReserved: Boolean,
+    isBlocked: Boolean,
     onClick: () -> Unit,
     onRenameClick: () -> Unit
 ) {
@@ -428,6 +540,20 @@ private fun DeviceListRow(
                             label = "Renamed",
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    if (isReserved) {
+                        DeviceBadgePill(
+                            label = stringResource(R.string.device_badge_reserved),
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    if (isBlocked) {
+                        DeviceBadgePill(
+                            label = stringResource(R.string.device_badge_blocked),
+                            containerColor = colors.error.copy(alpha = 0.16f),
+                            contentColor = colors.error
                         )
                     }
                 }

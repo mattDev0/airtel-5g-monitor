@@ -44,7 +44,8 @@ data class AppPreferencesSnapshot(
     val notifyQuotaWarning: Boolean = true,
     val notifyNewSms: Boolean = true,
     val notifyNewDevice: Boolean = false,
-    val notifyUnreachable: Boolean = true
+    val notifyUnreachable: Boolean = true,
+    val ussdShortcuts: List<String> = emptyList()
 )
 
 /**
@@ -161,6 +162,8 @@ class AppPreferencesRepository(
         val notifySms = prefs[KEY_NOTIFY_SMS] ?: true
         val notifyDevice = prefs[KEY_NOTIFY_DEVICE] ?: false
         val notifyUnreachable = prefs[KEY_NOTIFY_UNREACHABLE] ?: true
+        val shortcutsRaw = prefs[KEY_USSD_SHORTCUTS].orEmpty()
+        val shortcuts = shortcutsRaw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
 
         return AppPreferencesSnapshot(
             isLoaded = true,
@@ -176,7 +179,8 @@ class AppPreferencesRepository(
             notifyQuotaWarning = notifyQuota,
             notifyNewSms = notifySms,
             notifyNewDevice = notifyDevice,
-            notifyUnreachable = notifyUnreachable
+            notifyUnreachable = notifyUnreachable,
+            ussdShortcuts = shortcuts
         )
     }
 
@@ -231,7 +235,8 @@ class AppPreferencesRepository(
         notifyQuotaWarning: Boolean? = null,
         notifyNewSms: Boolean? = null,
         notifyNewDevice: Boolean? = null,
-        notifyUnreachable: Boolean? = null
+        notifyUnreachable: Boolean? = null,
+        ussdShortcuts: List<String>? = null
     ) {
         val current = _preferences.value
         val next = current.copy(
@@ -247,7 +252,8 @@ class AppPreferencesRepository(
             notifyQuotaWarning = notifyQuotaWarning ?: current.notifyQuotaWarning,
             notifyNewSms = notifyNewSms ?: current.notifyNewSms,
             notifyNewDevice = notifyNewDevice ?: current.notifyNewDevice,
-            notifyUnreachable = notifyUnreachable ?: current.notifyUnreachable
+            notifyUnreachable = notifyUnreachable ?: current.notifyUnreachable,
+            ussdShortcuts = ussdShortcuts ?: current.ussdShortcuts
         )
         _preferences.value = next
 
@@ -271,6 +277,13 @@ class AppPreferencesRepository(
                 if (notifyNewSms != null) prefs[KEY_NOTIFY_SMS] = next.notifyNewSms
                 if (notifyNewDevice != null) prefs[KEY_NOTIFY_DEVICE] = next.notifyNewDevice
                 if (notifyUnreachable != null) prefs[KEY_NOTIFY_UNREACHABLE] = next.notifyUnreachable
+                if (ussdShortcuts != null) {
+                    prefs[KEY_USSD_SHORTCUTS] = next.ussdShortcuts
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .distinct()
+                        .joinToString("\n")
+                }
                 prefs[KEY_MIGRATED] = true
             }
         }
@@ -297,6 +310,7 @@ class AppPreferencesRepository(
         private val KEY_NOTIFY_SMS = booleanPreferencesKey("notify_new_sms")
         private val KEY_NOTIFY_DEVICE = booleanPreferencesKey("notify_new_device")
         private val KEY_NOTIFY_UNREACHABLE = booleanPreferencesKey("notify_unreachable")
+        private val KEY_USSD_SHORTCUTS = stringPreferencesKey("ussd_shortcuts")
         private val KEY_MIGRATED = booleanPreferencesKey("migrated_from_legacy_prefs")
     }
 }

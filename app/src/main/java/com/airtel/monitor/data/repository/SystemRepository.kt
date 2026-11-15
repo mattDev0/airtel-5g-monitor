@@ -1,5 +1,8 @@
 package com.airtel.monitor.data.repository
 
+import com.airtel.monitor.data.model.RouterTimeConfig
+import com.airtel.monitor.data.model.WanLinkDetectConfig
+
 import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.network.SettingsWriter
@@ -234,6 +237,239 @@ class SystemRepository(
         session.execute(cmd = 11, method = "GET").map { json ->
             json.optString("systime", "").trim()
         }
+
+    /** Loads router time, timezone, and NTP server configuration (`cmd 11`). */
+    fun loadRouterTimeConfig(): RouterResult<RouterTimeConfig> =
+        session.execute(cmd = 11, method = "GET").map(::parseRouterTimeConfig)
+
+    /** Saves timezone, NTP switch/servers, and optional manual datetime (`cmd 11`). */
+    suspend fun saveRouterTimeConfig(
+        config: RouterTimeConfig,
+        manualDateTime: String
+    ): RouterResult<RouterTimeConfig> {
+        val cleanTz = config.timezone.trim().replace(Regex("_\\d+$"), "").ifEmpty { "UTC-8" }
+        val wireDateTime = formatCmd11Datetime(manualDateTime)
+            ?: return RouterResult.BadResponse("Invalid datetime format (expected yyyy-MM-dd HH:mm or yyyy-MM-dd HH:mm:ss)")
+        val targetNtp = if (config.ntpEnabled) "1" else "0"
+        val s1 = config.server1.trim()
+        val s2 = config.server2.trim()
+        val s3 = config.server3.trim()
+        val s4 = config.server4.trim()
+        return writer.write(
+            WriteSpec(
+                cmd = 11,
+                buildPayload = {
+                    mapOf(
+                        "timezone" to cleanTz,
+                        "ntpSwitch" to targetNtp,
+                        "timeServer" to s1,
+                        "timeServer2" to s2,
+                        "timeServer3" to s3,
+                        "timeServer4" to s4,
+                        "datetime" to wireDateTime
+                    )
+                },
+                verify = { readBack ->
+                    val readNtp = readBack.optString("ntpSwitch", "") == targetNtp
+                    val readTz = readBack.optString("timezone", "").trim().replace(Regex("_\\d+$"), "")
+                    readNtp && (readTz.isEmpty() || readTz == cleanTz)
+                },
+                parseResult = ::parseRouterTimeConfig,
+                verifyRetries = 2,
+                verifyDelayMs = 300L
+            )
+        )
+    }
+
+    /** Syncs router clock to phone timestamp (`cmd 321`). */
+    suspend fun syncClientTime(clientTime: String): RouterResult<Unit> {
+        val clean = clientTime.trim()
+        if (!Regex("\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}(:\\d{2})?").matches(clean)) {
+            return RouterResult.BadResponse("Invalid client time format")
+        }
+        return writer.write(
+            WriteSpec(
+                cmd = 321,
+                skipPreRead = true,
+                skipVerifyRead = true,
+                buildPayload = { mapOf("clientTime" to clean) },
+                verify = { true },
+                parseResult = { Unit }
+            )
+        )
+    }
+
+    /** Loads WAN link detection and auto-recovery configuration (`cmd 336`). */
+    fun loadWanLinkDetect(): RouterResult<WanLinkDetectConfig> =
+        session.execute(cmd = 336, method = "GET").map(::parseWanLinkDetect)
+
+    /** Validates and saves WAN link detection configuration (`cmd 336`). */
+    suspend fun saveWanLinkDetect(
+        config: WanLinkDetectConfig,
+        rescanAllowed: Boolean
+    ): RouterResult<WanLinkDetectConfig> {
+        val mixMode = config.isMixMode || config.networkMode in setOf("5", "7", "9")
+        val effectiveEnabled = mixMode || config.enabled
+        if (config.checkTimeSec !in 1..1800) {
+            return RouterResult.BadResponse("Check interval must be 1–1800 seconds")
+        }
+        if (config.rebootWaitMinutes !in 3..30) {
+            return RouterResult.BadResponse("Reboot wait time must be 3–30 minutes")
+        }
+        if (config.rescanNetworkSec !in 10..600) {
+            return RouterResult.BadResponse("Rescan interval must be 10–600 seconds")
+        }
+        val ip1 = config.ip1.trim()
+        val ip2 = config.ip2.trim()
+        val ip3 = config.ip3.trim()
+        if (ip1.isEmpty()) {
+            return RouterResult.BadResponse("Primary probe target (IP/Host 1) is required")
+        }
+        val hosts = listOf(ip1, ip2, ip3).filter { it.isNotEmpty() }
+        for (host in hosts) {
+            if (!isValidProbeHost(host, domainOnly = config.checkMode == 3)) {
+                return RouterResult.BadResponse("Invalid probe target: $host")
+            }
+        }
+        val action = config.action.trim().ifEmpty { "0" }
+        if (action == "3" && !rescanAllowed) {
+            return RouterResult.BadResponse("Network rescan recovery action is not supported in current WAN mode")
+        }
+        if (effectiveEnabled && action == "1" && (config.rebootWaitMinutes * 60) < config.checkTimeSec) {
+            return RouterResult.BadResponse("Reboot wait time (minutes * 60) must be >= check interval")
+        }
+        val v4 = listOf(config.ipv4Dns1.trim(), config.ipv4Dns2.trim(), config.ipv4Dns3.trim())
+        if (effectiveEnabled && config.ipv4DnsSw) {
+            if (v4.all { it.isEmpty() }) {
+                return RouterResult.BadResponse("Enter at least one IPv4 DNS server when custom IPv4 DNS check is enabled")
+            }
+            v4.filter { it.isNotEmpty() }.forEach { addr ->
+                if (!isValidIpv4Address(addr)) return RouterResult.BadResponse("Invalid IPv4 DNS server: $addr")
+            }
+        }
+        val v6 = listOf(config.ipv6Dns1.trim(), config.ipv6Dns2.trim(), config.ipv6Dns3.trim())
+        if (effectiveEnabled && config.ipv6DnsSw) {
+            if (v6.all { it.isEmpty() }) {
+                return RouterResult.BadResponse("Enter at least one IPv6 DNS server when custom IPv6 DNS check is enabled")
+            }
+            v6.filter { it.isNotEmpty() }.forEach { addr ->
+                if (!isValidIpv6Address(addr)) return RouterResult.BadResponse("Invalid IPv6 DNS server: $addr")
+            }
+        }
+        val targetSwitchInt = if (effectiveEnabled) 1 else 0
+        val targetSwitchStr = if (effectiveEnabled) "1" else "0"
+        return writer.write(
+            WriteSpec(
+                cmd = 336,
+                buildPayload = {
+                    mapOf(
+                        "wanLinkDetectSwitch" to targetSwitchInt,
+                        "wanLinkDetectCheckTime" to config.checkTimeSec,
+                        "checkWanLinkDetectMode" to config.checkMode,
+                        "wanLinkDetectIP1" to ip1,
+                        "wanLinkDetectIP2" to ip2,
+                        "wanLinkDetectIP3" to ip3,
+                        "LinkDetectAction" to action,
+                        "reboot_wait_time" to config.rebootWaitMinutes,
+                        "dial_wait_time" to config.rescanNetworkSec,
+                        "dnsv4_server_sw" to if (config.ipv4DnsSw) "1" else "0",
+                        "dnsv4_server1" to v4[0],
+                        "dnsv4_server2" to v4[1],
+                        "dnsv4_server3" to v4[2],
+                        "dnsv6_server_sw" to if (config.ipv6DnsSw) "1" else "0",
+                        "dnsv6_server1" to v6[0],
+                        "dnsv6_server2" to v6[1],
+                        "dnsv6_server3" to v6[2]
+                    )
+                },
+                verify = { readBack ->
+                    val readSw = readBack.optString("wanLinkDetectSwitch", "")
+                    val readSec = readBack.optString("wanLinkDetectCheckTime", "").toIntOrNull()
+                    (readSw == targetSwitchStr || mixMode) && readSec == config.checkTimeSec
+                },
+                parseResult = ::parseWanLinkDetect,
+                verifyRetries = 2,
+                verifyDelayMs = 250L
+            )
+        )
+    }
+
+    /** Triggers irreversible router factory reset (`cmd 112`). Caller must obtain Tier-3 confirmation. */
+    suspend fun factoryReset(): RouterResult<Unit> =
+        writer.write(
+            WriteSpec(
+                cmd = 112,
+                skipPreRead = true,
+                skipVerifyRead = true,
+                allowEmptyWriteReply = true,
+                buildPayload = { emptyMap() },
+                verify = { true },
+                parseResult = { Unit }
+            )
+        )
+
+    private fun parseRouterTimeConfig(json: JSONObject): RouterTimeConfig = RouterTimeConfig(
+        systemTime = json.optString("systime", "").trim(),
+        timezone = json.optString("timezone", "UTC-8").trim().ifEmpty { "UTC-8" },
+        ntpEnabled = json.optString("ntpSwitch", "1") == "1",
+        server1 = json.optString("timeServer", "").trim(),
+        server2 = json.optString("timeServer2", "").trim(),
+        server3 = json.optString("timeServer3", "").trim(),
+        server4 = json.optString("timeServer4", "").trim()
+    )
+
+    private fun formatCmd11Datetime(raw: String): String? {
+        val digits = raw.replace(Regex("[-:\\s]"), "")
+        return when {
+            digits.length >= 12 && digits.all { it.isDigit() } -> digits.drop(4) + digits.take(4)
+            else -> null
+        }
+    }
+
+    private fun parseWanLinkDetect(json: JSONObject): WanLinkDetectConfig {
+        val wanMode = json.optString("wan_mode", "").trim()
+        val mixMode = wanMode in setOf("5", "7", "9")
+        val rawAction = json.optString("LinkDetectAction", "0").trim().ifEmpty { "0" }
+        val action = if (wanMode !in setOf("1", "5", "7", "9") && rawAction == "3") "0" else rawAction
+        return WanLinkDetectConfig(
+            enabled = mixMode || json.optString("wanLinkDetectSwitch", "0") == "1",
+            isMixMode = mixMode,
+            networkMode = wanMode,
+            checkTimeSec = json.optString("wanLinkDetectCheckTime", "10").toIntOrNull() ?: 10,
+            checkMode = json.optString("checkWanLinkDetectMode", "0").toIntOrNull() ?: 0,
+            ip1 = json.optString("wanLinkDetectIP1", "").trim(),
+            ip2 = json.optString("wanLinkDetectIP2", "").trim(),
+            ip3 = json.optString("wanLinkDetectIP3", "").trim(),
+            action = action,
+            rebootWaitMinutes = json.optString("reboot_wait_time", "3").toIntOrNull() ?: 3,
+            rescanNetworkSec = json.optString("dial_wait_time", "10").toIntOrNull() ?: 10,
+            ipv4DnsSw = json.optString("dnsv4_server_sw", "0") != "0",
+            ipv4Dns1 = json.optString("dnsv4_server1", "").trim(),
+            ipv4Dns2 = json.optString("dnsv4_server2", "").trim(),
+            ipv4Dns3 = json.optString("dnsv4_server3", "").trim(),
+            ipv6DnsSw = json.optString("dnsv6_server_sw", "0") != "0",
+            ipv6Dns1 = json.optString("dnsv6_server1", "").trim(),
+            ipv6Dns2 = json.optString("dnsv6_server2", "").trim(),
+            ipv6Dns3 = json.optString("dnsv6_server3", "").trim()
+        )
+    }
+
+    private fun isValidProbeHost(host: String, domainOnly: Boolean): Boolean {
+        if (isValidIpv4Address(host) || isValidIpv6Address(host)) return !domainOnly
+        return Regex("^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$").matches(host)
+    }
+
+    private fun isValidIpv4Address(ip: String): Boolean {
+        val parts = ip.split('.')
+        if (parts.size != 4) return false
+        return parts.all { seg ->
+            val n = seg.toIntOrNull()
+            n != null && n in 0..255 && (seg == "0" || !seg.startsWith("0"))
+        }
+    }
+
+    private fun isValidIpv6Address(ip: String): Boolean =
+        ip.contains(':') && runCatching { java.net.InetAddress.getByName(ip) is java.net.Inet6Address }.getOrDefault(false)
 
     fun loadScheduledReboot(): RouterResult<ScheduledRebootConfig> =
         session.execute(cmd = 263, method = "GET").map(::parseScheduledReboot)

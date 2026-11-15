@@ -14,14 +14,17 @@ import com.airtel.monitor.data.local.SharedPreferencesDailyUsageStore
 import com.airtel.monitor.data.local.SharedPreferencesMonitorStateStore
 import com.airtel.monitor.data.remote.SpeedTestRunner
 import com.airtel.monitor.data.repository.DeviceRepository
+import com.airtel.monitor.data.repository.FeatureFlagRepository
 import com.airtel.monitor.data.repository.LanRepository
 import com.airtel.monitor.data.repository.MobileRepository
+import com.airtel.monitor.data.repository.ParentalControlRepository
 import com.airtel.monitor.data.repository.SecurityRepository
 import com.airtel.monitor.data.repository.SignalRepository
 import com.airtel.monitor.data.repository.SimRepository
 import com.airtel.monitor.data.repository.SmsRepository
 import com.airtel.monitor.data.repository.StatusRepository
 import com.airtel.monitor.data.repository.SystemRepository
+import com.airtel.monitor.data.repository.UssdRepository
 import com.airtel.monitor.data.repository.WifiRepository
 import com.airtel.monitor.widget.RouterWidgetStore
 import com.airtel.monitor.widget.RouterWidgetUpdater
@@ -51,8 +54,14 @@ class AppContainer(application: Application) {
     val transport: RouterTransport = OkHttpRouterTransport()
     val routerSession = RouterSession(preferencesRepository, transport)
     val settingsWriter = SettingsWriter(routerSession)
+    val featureFlagRepository = FeatureFlagRepository(routerSession)
 
-    val statusRepository = StatusRepository(routerSession, aliasRepository, dailyUsageStore = dailyUsageStore)
+    val statusRepository = StatusRepository(
+        session = routerSession,
+        aliasLookup = aliasRepository,
+        dailyUsageStore = dailyUsageStore,
+        featureFlagRepository = featureFlagRepository
+    )
     val signalRepository = SignalRepository(routerSession, settingsWriter)
     val deviceRepository = DeviceRepository(statusRepository, aliasRepository, ouiVendorLookup)
     val wifiRepository = WifiRepository(routerSession, settingsWriter)
@@ -65,7 +74,9 @@ class AppContainer(application: Application) {
         onUnreadCountSync = { count -> statusRepository.updateSmsUnreadCount(count) }
     )
     val securityRepository = SecurityRepository(routerSession, settingsWriter)
+    val parentalControlRepository = ParentalControlRepository(routerSession, settingsWriter)
     val systemRepository = SystemRepository(routerSession, settingsWriter)
+    val ussdRepository = UssdRepository(routerSession, settingsWriter)
     val speedTestRunner = SpeedTestRunner()
 
     val pollingCoordinator = PollingCoordinator(

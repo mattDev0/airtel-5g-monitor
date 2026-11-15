@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AddComment
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Dialpad
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.Refresh
@@ -128,6 +129,17 @@ fun MessagesScreen(
             if (uiState.isLoading || uiState.isBusy) {
                 LoadingIndicator(modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(spacing.xs))
+            }
+            if (uiState.ussdAvailable) {
+                IconButton(
+                    onClick = viewModel::openUssdSheet,
+                    enabled = !uiState.isBusy
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Dialpad,
+                        contentDescription = stringResource(R.string.messages_ussd_btn)
+                    )
+                }
             }
             IconButton(
                 onClick = { viewModel.openCompose() },
@@ -340,13 +352,15 @@ fun MessagesScreen(
                 }
             }
 
-            item(key = "ussd_deferred_note") {
-                Text(
-                    text = stringResource(R.string.messages_ussd_deferred_note),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = spacing.xs)
-                )
+            if (uiState.flagsLoaded && !uiState.ussdAvailable) {
+                item(key = "ussd_disabled_note") {
+                    Text(
+                        text = stringResource(R.string.messages_ussd_disabled_note),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = spacing.xs)
+                    )
+                }
             }
         }
     }
@@ -386,6 +400,22 @@ fun MessagesScreen(
             serverMessage = uiState.statusNote,
             onDismiss = viewModel::dismissSettingsSheet,
             onSave = viewModel::saveSmsSettings
+        )
+    }
+
+    if (uiState.showUssdSheet) {
+        UssdDialerSheet(
+            isBusy = uiState.ussdBusy,
+            responseText = uiState.ussdResponseText,
+            needReply = uiState.ussdNeedReply,
+            errorMessage = uiState.ussdError,
+            shortcuts = uiState.ussdShortcuts,
+            onDismiss = viewModel::dismissUssdSheet,
+            onSendUssd = viewModel::sendUssd,
+            onSendPreset = viewModel::sendUssdPreset,
+            onCancelSession = viewModel::cancelUssdSession,
+            onAddShortcut = viewModel::addUssdShortcut,
+            onRemoveShortcut = viewModel::removeUssdShortcut
         )
     }
 

@@ -5,13 +5,16 @@ import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.network.SettingsWriter
 import com.airtel.monitor.core.network.WriteSpec
 import com.airtel.monitor.core.util.NetworkFormatters.isIpv4
+import com.airtel.monitor.core.util.Phase71Validators
 import com.airtel.monitor.core.util.WifiAndLanValidators
 import com.airtel.monitor.data.dto.parseDnsConfig
 import com.airtel.monitor.data.model.DnsConfig
 import com.airtel.monitor.data.model.LanConfig
+import com.airtel.monitor.data.model.StaticDhcpLease
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 import org.json.JSONObject
 
 class LanRepository(
@@ -23,6 +26,9 @@ class LanRepository(
 
     private val _lanConfig = MutableStateFlow<LanConfig?>(null)
     val lanConfig: StateFlow<LanConfig?> = _lanConfig.asStateFlow()
+
+    private val _staticLeases = MutableStateFlow<List<StaticDhcpLease>>(emptyList())
+    val staticLeases: StateFlow<List<StaticDhcpLease>> = _staticLeases.asStateFlow()
 
     fun loadDns(): RouterResult<DnsConfig> {
         return when (val res = session.execute(3)) {
@@ -231,6 +237,143 @@ class LanRepository(
             is RouterResult.LimitedAccess -> RouterResult.LimitedAccess(3, res.message)
             else -> res
         }
+    }
+
+    /** Reads DHCP static reservations (`cmd 115` `STATIC_LEASE`). */
+    fun loadStaticLeases(): RouterResult<List<StaticDhcpLease>> {
+        return when (val res = session.execute(cmd = 115, method = "GET")) {
+            is RouterResult.Ok -> {
+                val parsed = parseStaticLeases(res.data)
+                _staticLeases.value = parsed
+                RouterResult.Ok(parsed)
+            }
+            is RouterResult.NotLoggedIn -> res
+            is RouterResult.LimitedAccess -> res
+            is RouterResult.Unreachable -> res
+            is RouterResult.BadResponse -> res
+        }
+    }
+
+    /** Saves static DHCP IP/MAC reservations (`cmd 115`), optionally syncing `cmd 24` + `cmd 20`. */
+    suspend fun saveStaticLeases(
+        leases: List<StaticDhcpLease>,
+        syncIpMacBinding: Boolean = false
+    ): RouterResult<List<StaticDhcpLease>> {
+        if (leases.size > 20) {
+            return RouterResult.BadResponse("Maximum 20 static DHCP reservations supported")
+        }
+        val lanIp = _lanConfig.value?.lanIp?.trim().orEmpty()
+        val seenIps = HashSet<String>()
+        val seenMacs = HashSet<String>()
+        val normalized = ArrayList<StaticDhcpLease>(leases.size)
+
+        for (entry in leases) {
+            val ip = entry.ip.trim()
+            if (!isIpv4(ip) || ip == "0.0.0.0" || ip == "255.255.255.255") {
+                return RouterResult.BadResponse("Invalid static lease IPv4 address: $ip")
+            }
+            if (lanIp.isNotEmpty() && ip == lanIp) {
+                return RouterResult.BadResponse("Static lease IP cannot match router gateway ($lanIp)")
+            }
+            Phase71Validators.validateUnicastMac(entry.mac)?.let { err ->
+                return RouterResult.BadResponse("$err (${entry.mac})")
+            }
+            val mac = Phase71Validators.normalizeMac(entry.mac)
+                ?: return RouterResult.BadResponse("Invalid MAC address: ${entry.mac}")
+            if (!seenIps.add(ip)) {
+                return RouterResult.BadResponse("Duplicate IP address in static leases: $ip")
+            }
+            if (!seenMacs.add(mac)) {
+                return RouterResult.BadResponse("Duplicate MAC address in static leases: $mac")
+            }
+            normalized.add(StaticDhcpLease(ip = ip, mac = mac))
+        }
+
+        if (syncIpMacBinding) {
+            val bindingArray = JSONArray()
+            normalized.forEach { item ->
+                bindingArray.put(
+                    JSONObject().apply {
+                        put("remark", "IP Reservation")
+                        put("ip", item.ip)
+                        put("enableRule", true)
+                        put("ippro", "IPV4")
+                        put("mac", item.mac)
+                        put("flag", "1")
+                    }
+                )
+            }
+            val bindRes = writer.write(
+                WriteSpec(
+                    cmd = 24,
+                    readCmd = 24,
+                    readExtra = mapOf("getfun" to true),
+                    buildPayload = { mapOf("success" to true, "datas" to bindingArray) },
+                    verify = { readBack -> parseStaticLeases(readBack).size == normalized.size },
+                    parseResult = { Unit },
+                    verifyRetries = 2,
+                    verifyDelayMs = 400L
+                )
+            )
+            if (bindRes !is RouterResult.Ok) {
+                @Suppress("UNCHECKED_CAST")
+                return bindRes as RouterResult<List<StaticDhcpLease>>
+            }
+            val applyRes = writer.applyFilter()
+            if (applyRes !is RouterResult.Ok) {
+                @Suppress("UNCHECKED_CAST")
+                return applyRes as RouterResult<List<StaticDhcpLease>>
+            }
+        }
+
+        val leaseArray = JSONArray()
+        normalized.forEach { item ->
+            leaseArray.put(
+                JSONObject().apply {
+                    put("ip", item.ip)
+                    put("mac", item.mac)
+                }
+            )
+        }
+        val expectedSet = normalized.map { it.ip to it.mac }.toSet()
+        val writeRes = writer.write(
+            WriteSpec(
+                cmd = 115,
+                readCmd = 115,
+                buildPayload = {
+                    mapOf(
+                        "success" to true,
+                        "datas" to leaseArray
+                    )
+                },
+                verify = { readBack ->
+                    val actual = parseStaticLeases(readBack).map { it.ip to it.mac }.toSet()
+                    actual == expectedSet
+                },
+                parseResult = ::parseStaticLeases,
+                writeTimeoutSeconds = 20L,
+                verifyRetries = 5,
+                verifyDelayMs = 1500L
+            )
+        )
+        if (writeRes is RouterResult.Ok) {
+            _staticLeases.value = writeRes.data
+        }
+        return writeRes
+    }
+
+    private fun parseStaticLeases(json: JSONObject): List<StaticDhcpLease> {
+        val arr = json.optJSONArray("datas") ?: return emptyList()
+        val list = ArrayList<StaticDhcpLease>(arr.length())
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            val ip = obj.optString("ip", "").trim()
+            val mac = Phase71Validators.normalizeMac(obj.optString("mac", "")) ?: obj.optString("mac", "").trim()
+            if (ip.isNotEmpty() && mac.isNotEmpty()) {
+                list.add(StaticDhcpLease(ip = ip, mac = mac))
+            }
+        }
+        return list
     }
 
     private fun parseLanConfig(json: JSONObject): LanConfig = LanConfig(

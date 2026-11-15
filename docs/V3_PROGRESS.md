@@ -83,7 +83,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Live ZLT X17M validation of `cmd 282` (`neighbor_info`), `cmd 337` (`limitFlow`), `cmd 133` (`tx_mcs` / `rx_mcs` / `dl_qam` / `ul_qam`), and `cmd 207` (`uptime`) against the real router firmware.
 - Home "Messages" quick tile currently routes to the Settings tab placeholder until Phase 4 adds the Messages screen.
 
-### Blocked / Deferred
+### Blocked / Deferred *(Write schemas resolved across Phases 2–7.1; build sandbox offline from 192.168.1.1)*
 - **No LAN route to `http://192.168.1.1` from this build environment:** `curl -sS --max-time 5 http://192.168.1.1/index.html` timed out (`Connection timed out after 5002 milliseconds`).
 - Because write schemas must be confirmed from the router web UI HTML/JS and recorded under `Write schemas` in `docs/ROUTER_API.md` before writing Kotlin, `cmd 218` network-mode / `mode5g` / `lteCA` / `nrCA` SET switching is deferred and rendered read-only in Phase 1. Phases 2–5 SET features (`cmd 23`, `115`, `208`, `367`, `275`, `202`, `214`, `134`, `213`, `503`, `132` WPS, `350`, `13`, `14`, `16`, `102`, `112`) are verified from the captured web UI dump ahead of Phase 2+.
 
@@ -130,7 +130,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Runtime Compose rendering and clipboard copy feedback in `DevicesScreen` and `DeviceDetailSheet` against live `cmd 223` / `cmd 225` / `cmd 3` router payloads.
 - Confirming real firmware `expires` and wireless association edge cases for offline DHCP lease detection across extended lease expiry on the ZLT X17M.
 
-### Blocked / Deferred
+### Blocked / Deferred *(Resolved in Phase 7.1 below)*
 - Second-hop `secondMenuClick` HTML/JS files for Phase 2 write actions are absent from `~/airtelOdu-webui/`, so these writes were intentionally omitted rather than guessing router schemas:
   - Static DHCP reservations (`cmd 115`: `html/config/dhcpSetting.html/.js`)
   - MAC filtering & default policy (`cmd 23` / `cmd 30`: `html/firewall/macFilter.html`, `defaultMac.html`)
@@ -172,7 +172,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Live `cmd 134` / `cmd 51` SIM PIN lock toggle, unlock, and change behavior (**never** intentionally enter wrong PINs or test PUK against an active production SIM).
 - Live `cmd 3` DHCP pool, subnet mask, and gateway IP edit with app host migration (`updateHostIfChanged`) and QR code scanning compatibility on Pixel 6 / iPhone 12 Pro.
 
-### Blocked / Deferred
+### Blocked / Deferred *(Resolved in Phase 7.1 below)*
 - Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/` (write payloads omitted rather than guessed):
   - Wi-Fi TX power (`cmd 411`), WPS (`cmd 132`), Wi-Fi schedule (`cmd 503`), Guest Wi-Fi (`cmd 209`/`210`), and advanced channel/bandwidth forms.
   - Mobile network mode / 5G SA/NSA / LTE+NR CA selector (`cmd 218` SET), data roaming switch (`cmd 220` SET), and APN profile editor (`cmd 213`).
@@ -205,7 +205,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Tier-2 `cmd 14` SMS send, `cmd 13` delete, and `cmd 16` SMS settings persistence on real carrier SIM (never auto-sent against live router).
 - Multi-day accumulation in `SharedPreferencesDailyUsageStore` across live router polls.
 
-### Blocked / Deferred
+### Blocked / Deferred *(Resolved in Phase 7.1 below)*
 - Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/`:
   - USSD dialer (`cmd 350`: `html/manage/ussd.html/.js`)
   - Remote traffic limit / cycle write editor (`cmd 337` SET: `html/config/trafficLimit_settings.html/.js`)
@@ -240,7 +240,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Live ZLT X17M `cmd 367` firewall, `cmd 504` ALG, `cmd 263` scheduled reboot, `cmd 322` / `cmd 17` syslog, `cmd 264` self-check, and `cmd 102` password change behavior.
 - Live Cloudflare speed test execution on device cellular/Wi-Fi WAN link (tested against mock OkHttp `Interceptor` offline).
 
-### Blocked / Deferred
+### Blocked / Deferred *(Resolved in Phase 7.1 below)*
 - Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/` (`dmz`, `upnp`, `ddos`, `portForward`, `ipFilter`, `urlFilter`, `timeSet`, `wanLinkDetect`, standalone `restoreFactory` `cmd 112`).
 
 ---
@@ -304,3 +304,44 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 - Visual inspection on physical dark/light themes, 200% system font scale, tablet split/rail widths, and Layout Inspector recomposition profiling (headless CLI sandbox has no Android emulator/device or Android Studio).
 - Device screenshots were not recaptured in this CLI environment (`README.md` retains existing screenshots).
 - `Phase 8` iOS SwiftUI parity (`iosApp/`) intentionally not started yet; waits on Android review.
+
+---
+
+## Phase 7.1 — Deferred Second-Level Web UI Pages
+
+**Status:** Complete for every achievable item previously under `Blocked / Deferred` across Phases 2–5 (`cmd 11`, `112`, `115`, `132`, `172`, `2/211 subcmd 1`, `213`, `220`, `226`, `230/231`, `243`, `244/325`, `248`, `256`, `275`, `321`, `333`, `336`, `337`, `350`, `382/383/385/391`, `400`, `411`, `502`, `503`, `21`, `23`, `24`, `26`, `27`, `28`, `29`, `30`, `32`, `20`; only `LIMITED_ACCESS` / `§6 Out of scope` endpoints excluded)
+
+### Implemented
+- **Web UI Schemas & Feature Gating (`docs/ROUTER_API.md`, `RouterFeatureFlags.kt`, `FeatureFlagRepository.kt`, `Phase71Models.kt`, `Phase71Validators.kt`, `SettingsWriter.kt`):**
+  - Documented all verified second-level `~/airtelOdu-webui/` `GET`/`POST` payloads and constraints under `## Write schemas` in `docs/ROUTER_API.md`, plus explicit exclusions (`cmd 278`, `cmd 130`, `cmd 405–408`).
+  - Implemented `RouterFeatureFlags` (`cmd 80` `parseHexPageHide`, `pageHideCheck`, `pageHideCheck2`, `pageHideCheck3`, `aeraId`, `networkMode`, `ipPassthrough`, `lockPlmnFlag`, `wifiSsidForbid`, `wifiPwdForbid`, `fwSwitch`, `parentControlSwitch`) and `FeatureFlagRepository` (`cmd 80` GET, integrated into `AppContainer` and login/refresh flow).
+  - Implemented `Phase71Validators` (unicast MAC normalization & broadcast/zero/multicast rejection, IPv4/IPv6 & `start-end` range checks, `validatePortOrRange` & `cmd 400` conflict lookup, `validateFilterUrl`, APN regex & MTU, WPS 8-digit checksum, `cmd 11` datetime/POSIX timezone formatting, parental time-window & speed validation, UTF-16BE USSD decoder).
+  - Extended `SettingsWriter` (`skipPreRead`, `skipVerifyRead` for `cmd 112` / `cmd 350`, and `applyFilter()` for `cmd 20`).
+- **Batch A — USSD, Mobile Network/CA/Roaming/APN & Traffic Limit (`UssdRepository.kt`, `MobileRepository.kt`, `MessagesScreen.kt`, `MessagesSheets.kt`, `MessagesViewModel.kt`, `MobileAdvancedSheets.kt`, `SettingsHubScreen.kt`, `SettingsHubViewModel.kt`, `DataUsageScreen.kt`, `DataUsageViewModel.kt`, `StatusRepository.kt`, `Phase1Parsers.kt`):**
+  - Added interactive `USSD` dialer (`cmd 350` `subcmd 0/1/2/3/4`, ~3 s polling, UTF-16BE decoding, `506`/`507` status handling, gated by `ussdAvailable`) reachable from Messages.
+  - Added `Network Mode` (`cmd 256` with `NetworkModeCatalog` area-specific/bitmask mapping and `lockPlmnFlag` lock notice), `Carrier Aggregation` (`cmd 226` `lteCA` / `nrCA`), `Data Roaming` (`cmd 220` with Tier-2 roaming-charge confirm), and `APN & PDP Config` (`cmd 213 subcmd 3` MTU/NAT + `cmd 248` editable `apn_list` max 4 editable profiles + reset).
+  - Added `Traffic Limit & Cycle Settings` (`cmd 337` `limitSwitch`, `limitSize`, `flow_limit_unit` preserving GET convention, `startDate` `1..28`, and counter reset/calibration) in `DataUsageScreen`, plus router monthly usage sync.
+- **Batch B — Static DHCP Reservations, Firewall MAC Filtering & Parental Control (`LanRepository.kt`, `SecurityRepository.kt`, `ParentalControlRepository.kt`, `DevicePolicySheets.kt`, `DevicesScreen.kt`, `DevicesViewModel.kt`, `SecurityAdvancedSheets.kt`, `SecurityScreen.kt`, `SecurityViewModel.kt`):**
+  - Added Static DHCP reservations (`cmd 115` up to 20 entries, optional `cmd 24` `IP_MAC_BINDING` + `cmd 20` sync gated by `dhcpIpMacBindingSync`).
+  - Added MAC filtering (`cmd 23` up to 32 unicast rules) and default policy (`cmd 28` + `cmd 30`) keeping `enableLink = !acceptAll` aligned across `cmd 23` / `cmd 32` / `cmd 21` followed by `cmd 20`.
+  - Added Parental Control (`cmd 391` toggle, `cmd 382` speed limit 1..10000 KB/s, `cmd 383` blocked URLs <= 10 per MAC, `cmd 385` time schedules + `cmd 20`), strictly gated by `cmd 80` `parentalControlAvailable` (`pageHideCheck(153)`) and `parentSpeedVisible`/`parentUrlVisible`/`parentTimeVisible`.
+- **Batch C — Wi-Fi TX Power, Guest Wi-Fi, Advanced Channel/Bandwidth, WPS & Schedule (`WifiRepository.kt`, `WifiAdvancedSheets.kt`, `SettingsHubScreen.kt`, `SettingsHubViewModel.kt`):**
+  - Enforced `cmd 417` (`wifiStatus == "1"`) preflight before Wi-Fi writes and `wifiMode == "1"` STA read-only guard on advanced settings.
+  - Added model-conditional Wi-Fi TX Power (`cmd 411` when `wifiPowerCmd411Available`, else per-band `txPower` on `cmd 230`/`231`), Guest Wi-Fi (`cmd 2` / `cmd 211` `subcmd: 1`, Base64 UTF-8 SSID, primary-radio prerequisite), Advanced Radio (`cmd 230` / `cmd 231` including 5 GHz `dfsSwitch` clamping 160 MHz `bandWidth = "4"` to 80 MHz `"3"`), WPS (`cmd 132` toggle, `cmd 243` PBC & checksummed Enrollee PIN, `cmd 244`/`cmd 325` 120 s Random PIN polling, WPA3/`WPA2+WPA3` & hidden-SSID guards), and Wi-Fi Schedule (`cmd 503` `wifiSwitch` & on/off hours/minutes).
+- **Batch D — Security Firewall/Routing, Router Time, WAN Link Detect & Factory Reset (`SecurityRepository.kt`, `SecurityAdvancedSheets.kt`, `SecurityScreen.kt`, `SecurityViewModel.kt`, `SystemRepository.kt`, `SystemToolsSheets.kt`, `SystemToolsScreen.kt`, `SystemToolsViewModel.kt`):**
+  - Added `Firewall & Routing` controls gated by `RouterFeatureFlags` (`cmd 80` bits + `!ipPassthrough && networkMode != "7"` where applicable): DMZ (`cmd 172 subcmd 6`), DDoS (`cmd 275`), UPnP (`cmd 333` + optional read-only `cmd 202`), Port Forward (`cmd 27` -> `cmd 20` with `cmd 400` system-port conflict warning & Tier-2 confirm), IP/Port Filter (`cmd 32` -> `cmd 20`, clearing ports for `ICMP`/`All`), Port Filter (`cmd 21` -> `cmd 20`), URL Filter (`cmd 26` + `cmd 29` `enableLink` sync -> `cmd 20`), and Trusted IP (`cmd 502` `trusted_ip_0..14` -> `cmd 20`).
+  - Added Router Time / NTP & `Sync Phone Time` (`cmd 11`, `cmd 321`), WAN Link Detect (`cmd 336`, gating `LinkDetectAction == "3"` by `wanDetectRescanAvailable` and `reboot_wait_time * 60 >= checkTime`), and Factory Reset (`cmd 112` behind Tier-3 `"RESET"` `ConfirmSheet`).
+- **Tests:**
+  - Added `Phase71ValidatorsAndFlagsTest.kt` (`8` tests covering `cmd 80` hex flag decoding, `pageHideCheck`/`pageHideCheck2`, `NetworkModeCatalog`, MAC/IP/URL/port/`cmd 400`/WPS PIN/APN/`cmd 11` validators, and UTF-16BE USSD decoding).
+  - Added `Phase71SchemasAndReposTest.kt` (`6` tests covering Batch A–D write schemas, `cmd 417` preflight, Guest Wi-Fi Base64, DFS 160 MHz clamp, STA read-only guard, `cmd 23`/`28`/`30`/`32`/`21`/`26`/`29`/`20` sync, Parental Control, DMZ/DDoS/UPnP/PortForward/TrustedIP/`cmd 11`/`321`/`336`/`112` payloads via `FakeTransport`).
+
+### Explicitly Excluded (`LIMITED_ACCESS` or `§6 Out of Scope`)
+- `cmd 278` (`WIRELESS_MACFILTER`: `LIMITED_ACCESS` on user account; firewall `cmd 23`/`30` MAC filtering used instead)
+- `cmd 130` (`MULTI_APN_INFO`: `LIMITED_ACCESS`; primary APN uses `cmd 213` + `cmd 248`)
+- `cmd 405–408` (`TRAFFIC_SETTING` / `TRAFFIC_INTERFACE_LIST` / `TRAFFIC_DAY_STAT` / `TRAFFIC_HOUR_STAT`: `cmd 406` is `LIMITED_ACCESS`, `industryMenu` is disabled in `js/home.js:328-348`, `cmd 405` returns CAN-bus stub fields on Airtel NG, and `html/industry/` is `§6 Out of scope`; local `DailyUsageStore` remains authoritative)
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --console=plain` — **PASSED** (`102` unit tests across `18` test suites: `0` skipped, `0` failures, `0` errors; `compileDebugUnitTestKotlin` clean; `lintDebug` passed with `0` errors and `25` SARIF warnings; `lintVitalRelease`, R8 `minifyReleaseWithR8`, `assembleDebug`, and `assembleRelease` succeeded, producing `app-debug.apk` and `app-release-unsigned.apk`).
+
+### Untested on Device / Live Router
+- End-to-end live ZLT X17M validation of all newly enabled Batch A–D write commands, `cmd 80` flag gating on physical hardware, USSD carrier session timing (`cmd 350`), WPS PIN/PBC pairing, and Tier-3 Factory Reset (`cmd 112`).

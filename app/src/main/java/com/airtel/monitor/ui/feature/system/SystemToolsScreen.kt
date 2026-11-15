@@ -2,6 +2,11 @@
 
 package com.airtel.monitor.ui.feature.system
 
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.NetworkCheck
+import androidx.compose.material.icons.rounded.Schedule
+import com.airtel.monitor.ui.designsystem.SettingRow
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -313,28 +318,70 @@ fun SystemToolsScreen(
                     }
                 }
 
-                item(key = "sys_deferred_note") {
-                    Surface(
-                        shape = AirtelTheme.shapes.tile,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth()
+                item(key = "sys_time_ntp") {
+                    SectionCard(
+                        title = stringResource(R.string.system_time_title),
+                        subtitle = stringResource(R.string.system_time_subtitle)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(spacing.md),
-                            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                            verticalAlignment = Alignment.Top
+                        SettingRow(
+                            title = stringResource(R.string.system_time_sheet_title),
+                            subtitle = uiState.routerTime.ifBlank { "--" },
+                            leadingIcon = Icons.Rounded.Schedule,
+                            onClick = { viewModel.openSheet(ActiveSystemSheet.ROUTER_TIME) }
+                        )
+                    }
+                }
+
+                item(key = "sys_wan_detect") {
+                    SectionCard(
+                        title = stringResource(R.string.system_wan_detect_title),
+                        subtitle = stringResource(R.string.system_wan_detect_subtitle)
+                    ) {
+                        SettingRow(
+                            title = stringResource(R.string.system_wan_detect_sheet_title),
+                            subtitle = uiState.wanDetectConfig?.let { cfg ->
+                                if (cfg.enabled) "Enabled · ${cfg.checkTimeSec}s interval" else "Disabled"
+                            } ?: "Configure auto-recovery probes",
+                            leadingIcon = Icons.Rounded.NetworkCheck,
+                            onClick = { viewModel.openSheet(ActiveSystemSheet.WAN_LINK_DETECT) }
+                        )
+                    }
+                }
+
+                item(key = "sys_factory_reset") {
+                    var confirmFactoryReset by remember { mutableStateOf(false) }
+                    SectionCard(
+                        title = stringResource(R.string.system_factory_reset_title),
+                        subtitle = stringResource(R.string.system_factory_reset_subtitle)
+                    ) {
+                        OutlinedButton(
+                            onClick = { confirmFactoryReset = true },
+                            enabled = !uiState.sheetBusy,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.error),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Info,
+                                imageVector = Icons.Rounded.DeleteForever,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                modifier = Modifier.size(18.dp)
                             )
-                            Text(
-                                text = stringResource(R.string.system_deferred_note),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Spacer(modifier = Modifier.width(spacing.xs))
+                            Text(stringResource(R.string.system_factory_reset_btn))
                         }
+                    }
+                    if (confirmFactoryReset) {
+                        ConfirmSheet(
+                            title = stringResource(R.string.system_factory_reset_confirm_title),
+                            impactMessage = stringResource(R.string.system_factory_reset_confirm_impact),
+                            confirmLabel = stringResource(R.string.system_factory_reset_btn),
+                            tier = ConfirmTier.DESTRUCTIVE,
+                            requiredConfirmationText = stringResource(R.string.system_factory_reset_token),
+                            onConfirm = {
+                                confirmFactoryReset = false
+                                viewModel.factoryReset()
+                            },
+                            onDismiss = { confirmFactoryReset = false }
+                        )
                     }
                 }
             }
@@ -363,6 +410,26 @@ fun SystemToolsScreen(
             saving = uiState.passwordSaving,
             errorMessage = uiState.passwordError,
             onSubmit = viewModel::changeAdminPassword,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSystemSheet.ROUTER_TIME -> RouterTimeSheet(
+            config = uiState.timeConfig,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = viewModel::loadRouterTimeConfig,
+            onSave = viewModel::saveRouterTimeConfig,
+            onSyncPhoneTime = viewModel::syncClientTime,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSystemSheet.WAN_LINK_DETECT -> WanLinkDetectSheet(
+            config = uiState.wanDetectConfig,
+            rescanAllowed = uiState.featureFlags.wanDetectRescanAvailable,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = viewModel::loadWanLinkDetect,
+            onSave = viewModel::saveWanLinkDetect,
             onDismiss = viewModel::dismissSheet
         )
         null -> Unit

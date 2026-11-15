@@ -18,8 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AdminPanelSettings
+import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Laptop
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -40,6 +44,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +60,8 @@ import com.airtel.monitor.core.util.OuiVendorLookup
 import com.airtel.monitor.data.dto.formatDurationText
 import com.airtel.monitor.data.model.DeviceItem
 import com.airtel.monitor.data.model.DeviceType
+import com.airtel.monitor.ui.designsystem.ConfirmSheet
+import com.airtel.monitor.ui.designsystem.ConfirmTier
 import com.airtel.monitor.ui.designsystem.SectionCard
 import com.airtel.monitor.ui.designsystem.SettingValueRow
 import com.airtel.monitor.ui.designsystem.SignalBars
@@ -112,7 +122,14 @@ fun DeviceDetailSheet(
     onDismiss: () -> Unit,
     onCopy: (label: String, value: String) -> Unit,
     onRename: () -> Unit,
-    onResetAlias: () -> Unit
+    onResetAlias: () -> Unit,
+    isReserved: Boolean = false,
+    isBlocked: Boolean = false,
+    showParentalButton: Boolean = false,
+    isPolicySaving: Boolean = false,
+    onReserveStaticIp: () -> Unit = {},
+    onToggleBlock: () -> Unit = {},
+    onOpenParental: () -> Unit = {}
 ) {
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -121,6 +138,8 @@ fun DeviceDetailSheet(
     val spacing = AirtelTheme.spacing
     val colors = AirtelTheme.colors
     val formattedMac = OuiVendorLookup.formatMac(device.mac)
+    var confirmReserve by remember { mutableStateOf(false) }
+    var confirmBlockToggle by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -198,6 +217,20 @@ fun DeviceDetailSheet(
                                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                         }
+                        if (isReserved) {
+                            DeviceBadgePill(
+                                label = stringResource(R.string.device_badge_reserved),
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        if (isBlocked) {
+                            DeviceBadgePill(
+                                label = stringResource(R.string.device_badge_blocked),
+                                containerColor = colors.error.copy(alpha = 0.16f),
+                                contentColor = colors.error
+                            )
+                        }
                     }
                 }
             }
@@ -248,6 +281,55 @@ fun DeviceDetailSheet(
                         Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                         Text(
                             text = stringResource(R.string.device_action_reset_name),
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
+                if (!device.isRouter && device.ip.isNotBlank() && formattedMac.isNotBlank()) {
+                    FilledTonalButton(
+                        onClick = { confirmReserve = true },
+                        enabled = !isPolicySaving && !isReserved,
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        Icon(
+                            imageVector = if (isReserved) Icons.Rounded.CheckCircleOutline else Icons.Rounded.Dns,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = stringResource(
+                                if (isReserved) R.string.device_action_reserved_ip
+                                else R.string.device_action_reserve_ip
+                            ),
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
+                if (!device.isRouter && formattedMac.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = { confirmBlockToggle = true },
+                        enabled = !isPolicySaving,
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        Icon(Icons.Rounded.Block, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = stringResource(
+                                if (isBlocked) R.string.device_action_unblock
+                                else R.string.device_action_block
+                            ),
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
+                if (showParentalButton && !device.isRouter) {
+                    OutlinedButton(
+                        onClick = onOpenParental,
+                        enabled = !isPolicySaving,
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        Icon(Icons.Rounded.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = stringResource(R.string.devices_policy_parental),
                             modifier = Modifier.padding(start = 6.dp)
                         )
                     }
@@ -319,6 +401,47 @@ fun DeviceDetailSheet(
                 }
             }
         }
+    }
+
+    if (confirmReserve) {
+        ConfirmSheet(
+            title = stringResource(R.string.device_reserve_confirm_title),
+            impactMessage = stringResource(
+                R.string.device_reserve_confirm_impact,
+                device.alias,
+                formattedMac,
+                device.ip
+            ),
+            confirmLabel = stringResource(R.string.device_action_reserve_ip),
+            tier = ConfirmTier.CONNECTIVITY,
+            onConfirm = {
+                confirmReserve = false
+                onReserveStaticIp()
+            },
+            onDismiss = { confirmReserve = false }
+        )
+    }
+
+    if (confirmBlockToggle) {
+        ConfirmSheet(
+            title = stringResource(
+                if (isBlocked) R.string.device_unblock_confirm_title else R.string.device_block_confirm_title,
+                device.alias
+            ),
+            impactMessage = stringResource(
+                if (isBlocked) R.string.device_unblock_confirm_impact else R.string.device_block_confirm_impact,
+                formattedMac
+            ),
+            confirmLabel = stringResource(
+                if (isBlocked) R.string.device_action_unblock else R.string.device_action_block
+            ),
+            tier = ConfirmTier.CONNECTIVITY,
+            onConfirm = {
+                confirmBlockToggle = false
+                onToggleBlock()
+            },
+            onDismiss = { confirmBlockToggle = false }
+        )
     }
 }
 

@@ -8,11 +8,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.airtel.monitor.core.di.AppContainer
 import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.errorMessage
+import com.airtel.monitor.data.model.RouterFeatureFlags
 import com.airtel.monitor.data.model.SmsFolder
 import com.airtel.monitor.data.model.SmsMessage
 import com.airtel.monitor.data.model.SmsPage
 import com.airtel.monitor.data.model.SmsSettingsConfig
 import com.airtel.monitor.data.repository.SmsRepository
+import com.airtel.monitor.data.repository.UssdRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +22,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -39,7 +43,15 @@ data class MessagesUiState(
     val showComposeSheet: Boolean = false,
     val composeInitialPhone: String = "",
     val composeInitialBody: String = "",
-    val showSettingsSheet: Boolean = false
+    val showSettingsSheet: Boolean = false,
+    val flagsLoaded: Boolean = false,
+    val ussdAvailable: Boolean = false,
+    val showUssdSheet: Boolean = false,
+    val ussdBusy: Boolean = false,
+    val ussdResponseText: String = "",
+    val ussdNeedReply: Boolean = false,
+    val ussdError: String? = null,
+    val ussdShortcuts: List<String> = emptyList()
 ) {
     val visiblePage: SmsPage
         get() = if (activeFolder == SmsFolder.INBOX) inboxPage else outboxPage
@@ -49,13 +61,23 @@ class MessagesViewModel internal constructor(
     private val smsRepository: SmsRepository,
     unreadCountFlow: Flow<Int>,
     private val emitStatusMessage: (String) -> Unit,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val ussdRepository: UssdRepository? = null,
+    featureFlagsFlow: Flow<RouterFeatureFlags> = flowOf(RouterFeatureFlags()),
+    ussdShortcutsFlow: Flow<List<String>> = flowOf(emptyList()),
+    private val saveUssdShortcuts: (List<String>) -> Unit = {},
+    private val ensureFlagsLoaded: () -> Unit = {}
 ) : ViewModel() {
 
     constructor(container: AppContainer) : this(
         smsRepository = container.smsRepository,
         unreadCountFlow = container.statusRepository.smsUnreadCount,
-        emitStatusMessage = container::emitStatusMessage
+        emitStatusMessage = container::emitStatusMessage,
+        ussdRepository = container.ussdRepository,
+        featureFlagsFlow = container.featureFlagRepository.flags,
+        ussdShortcutsFlow = container.preferencesRepository.preferencesFlow.map { it.ussdShortcuts },
+        saveUssdShortcuts = { list -> container.preferencesRepository.updateSettings(ussdShortcuts = list) },
+        ensureFlagsLoaded = { container.featureFlagRepository.ensureLoaded() }
     )
 
     private val local = MutableStateFlow(LocalMessagesState())
@@ -70,10 +92,15 @@ class MessagesViewModel internal constructor(
         RepoSlice(inbox, outbox, cfg, unread)
     }
 
+    private val ussdEnvFlow = combine(featureFlagsFlow, ussdShortcutsFlow) { flags, shortcuts ->
+        flags to shortcuts
+    }
+
     val uiState: StateFlow<MessagesUiState> = combine(
         repoFlow,
+        ussdEnvFlow,
         local
-    ) { repo, loc ->
+    ) { repo, (flags, shortcuts), loc ->
         MessagesUiState(
             activeFolder = loc.activeFolder,
             inboxPage = repo.inbox ?: SmsPage(folder = SmsFolder.INBOX),
@@ -89,13 +116,22 @@ class MessagesViewModel internal constructor(
             showComposeSheet = loc.showComposeSheet,
             composeInitialPhone = loc.composeInitialPhone,
             composeInitialBody = loc.composeInitialBody,
-            showSettingsSheet = loc.showSettingsSheet
+            showSettingsSheet = loc.showSettingsSheet,
+            flagsLoaded = flags.isLoaded,
+            ussdAvailable = ussdRepository != null && flags.ussdAvailable,
+            showUssdSheet = loc.showUssdSheet,
+            ussdBusy = loc.ussdBusy,
+            ussdResponseText = loc.ussdResponseText,
+            ussdNeedReply = loc.ussdNeedReply,
+            ussdError = loc.ussdError,
+            ussdShortcuts = shortcuts
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MessagesUiState())
 
     fun ensureLoadedOnOpen() {
         if (initialLoadStarted) return
         initialLoadStarted = true
+        viewModelScope.launch(ioDispatcher) { ensureFlagsLoaded() }
         loadSettings()
         loadFolderPage(local.value.activeFolder, page = 1)
     }
@@ -286,6 +322,96 @@ class MessagesViewModel internal constructor(
         }
     }
 
+    fun openUssdSheet() {
+        local.update { it.copy(showUssdSheet = true, ussdError = null) }
+    }
+
+    fun dismissUssdSheet() {
+        local.update { it.copy(showUssdSheet = false) }
+    }
+
+    fun sendUssd(codeOrReply: String, isReply: Boolean = false) {
+        val repo = ussdRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(ussdBusy = true, ussdError = null) }
+            when (val res = repo.sendUssd(codeOrReply, isReply = isReply)) {
+                is RouterResult.Ok -> {
+                    local.update {
+                        it.copy(
+                            ussdBusy = false,
+                            ussdResponseText = res.data.text,
+                            ussdNeedReply = res.data.needReply,
+                            ussdError = null
+                        )
+                    }
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(ussdBusy = false, ussdError = err, ussdNeedReply = false) }
+                }
+            }
+        }
+    }
+
+    fun sendUssdPreset(subcmd: String) {
+        val repo = ussdRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(ussdBusy = true, ussdError = null) }
+            when (val res = repo.sendPreset(subcmd)) {
+                is RouterResult.Ok -> {
+                    local.update {
+                        it.copy(
+                            ussdBusy = false,
+                            ussdResponseText = res.data.text,
+                            ussdNeedReply = res.data.needReply,
+                            ussdError = null
+                        )
+                    }
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(ussdBusy = false, ussdError = err) }
+                }
+            }
+        }
+    }
+
+    fun cancelUssdSession() {
+        val repo = ussdRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(ussdBusy = true, ussdError = null) }
+            when (val res = repo.cancelSession()) {
+                is RouterResult.Ok -> {
+                    local.update {
+                        it.copy(
+                            ussdBusy = false,
+                            ussdNeedReply = false,
+                            ussdResponseText = "",
+                            ussdError = null
+                        )
+                    }
+                    emitStatusMessage("USSD session cancelled")
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(ussdBusy = false, ussdError = err) }
+                }
+            }
+        }
+    }
+
+    fun addUssdShortcut(code: String) {
+        val clean = code.trim()
+        if (clean.isEmpty()) return
+        val next = (uiState.value.ussdShortcuts + clean).distinct()
+        saveUssdShortcuts(next)
+    }
+
+    fun removeUssdShortcut(code: String) {
+        val next = uiState.value.ussdShortcuts.filterNot { it == code }
+        saveUssdShortcuts(next)
+    }
+
     private data class RepoSlice(
         val inbox: SmsPage?,
         val outbox: SmsPage?,
@@ -304,7 +430,12 @@ class MessagesViewModel internal constructor(
         val showComposeSheet: Boolean = false,
         val composeInitialPhone: String = "",
         val composeInitialBody: String = "",
-        val showSettingsSheet: Boolean = false
+        val showSettingsSheet: Boolean = false,
+        val showUssdSheet: Boolean = false,
+        val ussdBusy: Boolean = false,
+        val ussdResponseText: String = "",
+        val ussdNeedReply: Boolean = false,
+        val ussdError: String? = null
     )
 
     companion object {

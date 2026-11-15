@@ -11,13 +11,25 @@ import com.airtel.monitor.core.datastore.ThemePreference
 import com.airtel.monitor.core.di.AppContainer
 import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.errorMessage
+import com.airtel.monitor.data.model.ApnConfigSnapshot
+import com.airtel.monitor.data.model.ApnProfile
 import com.airtel.monitor.data.model.DiagnosisMode
 import com.airtel.monitor.data.model.DiagnosisState
+import com.airtel.monitor.data.model.GuestWifiBandConfig
+import com.airtel.monitor.data.model.GuestWifiSnapshot
 import com.airtel.monitor.data.model.LanConfig
+import com.airtel.monitor.data.model.MobileAdvancedConfig
+import com.airtel.monitor.data.model.NetworkModeCatalog
+import com.airtel.monitor.data.model.RouterFeatureFlags
 import com.airtel.monitor.data.model.RouterState
 import com.airtel.monitor.data.model.SimPinState
+import com.airtel.monitor.data.model.StaticDhcpLease
+import com.airtel.monitor.data.model.WifiAdvancedBandConfig
 import com.airtel.monitor.data.model.WifiBandDetails
+import com.airtel.monitor.data.model.WifiPower411Config
 import com.airtel.monitor.data.model.WifiRadioConfig
+import com.airtel.monitor.data.model.WifiScheduleConfig
+import com.airtel.monitor.data.model.WpsSnapshot
 import com.airtel.monitor.data.repository.LanRepository
 import com.airtel.monitor.data.repository.MobileRepository
 import com.airtel.monitor.data.repository.SimRepository
@@ -33,6 +45,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -42,8 +55,15 @@ enum class ActiveSettingsSheet {
     EDIT_WIFI_24G,
     EDIT_WIFI_5G,
     WIFI_QR,
+    GUEST_WIFI,
+    WIFI_ADVANCED,
+    WPS_SETUP,
+    WIFI_SCHEDULE,
+    MOBILE_NETWORK_MODE,
+    APN_EDITOR,
     SIM_PIN,
-    LAN_DHCP
+    LAN_DHCP,
+    STATIC_LEASES
 }
 
 data class SettingsHubUiState(
@@ -60,8 +80,18 @@ data class SettingsHubUiState(
     val notifyUnreachable: Boolean = true,
     val showConnectionDialog: Boolean = false,
     val activeSheet: ActiveSettingsSheet? = null,
+    val featureFlags: RouterFeatureFlags = RouterFeatureFlags(),
     val wifiRadioConfig: WifiRadioConfig = WifiRadioConfig(),
     val wifiBandDetails: WifiBandDetails = WifiBandDetails(),
+    val guestWifi: GuestWifiSnapshot = GuestWifiSnapshot(),
+    val wifiAdv24g: WifiAdvancedBandConfig? = null,
+    val wifiAdv5g: WifiAdvancedBandConfig? = null,
+    val wifiPower411: WifiPower411Config? = null,
+    val wpsSnapshot: WpsSnapshot = WpsSnapshot(),
+    val wpsRandomPin: String? = null,
+    val wpsRandomSecondsLeft: Int = 0,
+    val wpsPairedSuccess: Boolean = false,
+    val wifiSchedule: WifiScheduleConfig = WifiScheduleConfig(),
     val wifiLoaded: Boolean = false,
     val wifiRadioLoading: Boolean = false,
     val wifiRadioSaving: Boolean = false,
@@ -69,7 +99,14 @@ data class SettingsHubUiState(
     val mobileDataOn: Boolean? = null,
     val flightModeOn: Boolean? = null,
     val networkModeSummary: String = "--",
+    val networkModeLabel: String = "--",
     val roamingEnabled: Boolean = false,
+    val lteCaEnabled: Boolean = true,
+    val nrCaEnabled: Boolean = true,
+    val mobileAdvanced: MobileAdvancedConfig = MobileAdvancedConfig(),
+    val mobileAdvancedLoading: Boolean = false,
+    val apnConfig: ApnConfigSnapshot = ApnConfigSnapshot(),
+    val apnLoading: Boolean = false,
     val mobileSaving: Boolean = false,
     val mobileMessage: String? = null,
     val simPinState: SimPinState = SimPinState(),
@@ -78,6 +115,7 @@ data class SettingsHubUiState(
     val simSaving: Boolean = false,
     val simMessage: String? = null,
     val lanConfig: LanConfig = LanConfig(),
+    val staticLeases: List<StaticDhcpLease> = emptyList(),
     val lanLoaded: Boolean = false,
     val lanLoading: Boolean = false,
     val lanSaving: Boolean = false,
@@ -114,7 +152,9 @@ class SettingsHubViewModel internal constructor(
         sms: Boolean?,
         device: Boolean?,
         unreachable: Boolean?
-    ) -> Unit = { _, _, _, _, _ -> }
+    ) -> Unit = { _, _, _, _, _ -> },
+    private val featureFlagsFlow: Flow<RouterFeatureFlags> = flowOf(RouterFeatureFlags()),
+    private val ensureFlagsLoaded: () -> RouterFeatureFlags = { RouterFeatureFlags() }
 ) : ViewModel() {
 
     constructor(container: AppContainer) : this(
@@ -149,38 +189,104 @@ class SettingsHubViewModel internal constructor(
                 notifyNewDevice = device,
                 notifyUnreachable = unreachable
             )
+        },
+        featureFlagsFlow = container.featureFlagRepository.flags,
+        ensureFlagsLoaded = {
+            container.featureFlagRepository.ensureLoaded().getOrNull()
+                ?: container.featureFlagRepository.flags.value
         }
     )
 
     private val local = MutableStateFlow(LocalSettingsState())
     private var diagnosisJob: Job? = null
+    private var wpsPollJob: Job? = null
     private var initialLoadTriggered = false
 
-    private val routerAndWifiFlow = combine(
+    private data class WifiCoreTuple(
+        val router: RouterState?,
+        val cfg: WifiRadioConfig?,
+        val details: WifiBandDetails?,
+        val guest: GuestWifiSnapshot
+    )
+
+    private data class WifiAdvTuple(
+        val adv24: WifiAdvancedBandConfig?,
+        val adv5: WifiAdvancedBandConfig?,
+        val pwr411: WifiPower411Config?,
+        val wps: WpsSnapshot,
+        val schedule: WifiScheduleConfig?
+    )
+
+    private val wifiCoreFlow = combine(
         routerStateFlow,
         wifiRepository.config,
-        wifiRepository.bandDetails
-    ) { router, wifiCfg, wifiDetails ->
-        Triple(router, wifiCfg, wifiDetails)
+        wifiRepository.bandDetails,
+        wifiRepository.guestWifi
+    ) { router, wifiCfg, wifiDetails, guest ->
+        WifiCoreTuple(router, wifiCfg, wifiDetails, guest)
     }
+
+    private val wifiAdvFlow = combine(
+        wifiRepository.adv24g,
+        wifiRepository.adv5g,
+        wifiRepository.power411,
+        wifiRepository.wps,
+        wifiRepository.schedule
+    ) { adv24, adv5, pwr411, wps, sched ->
+        WifiAdvTuple(adv24, adv5, pwr411, wps, sched)
+    }
+
+    private val routerAndWifiFlow = combine(wifiCoreFlow, wifiAdvFlow) { core, adv ->
+        core to adv
+    }
+
+    private val mobileRepoFlow = combine(
+        mobileRepository.advancedConfig,
+        mobileRepository.apnConfig,
+        featureFlagsFlow
+    ) { mobAdv, apn, flags ->
+        Triple(mobAdv, apn, flags)
+    }
+
+    private data class RepoConfigsTuple(
+        val lan: LanConfig?,
+        val staticLeases: List<StaticDhcpLease>,
+        val sim: SimPinState?,
+        val loc: LocalSettingsState
+    )
 
     private val repoConfigsFlow = combine(
         lanRepository.lanConfig,
+        lanRepository.staticLeases,
         simRepository.state,
         local
-    ) { lan, sim, loc ->
-        Triple(lan, sim, loc)
+    ) { lan, leases, sim, loc ->
+        RepoConfigsTuple(lan, leases, sim, loc)
     }
 
     val uiState: StateFlow<SettingsHubUiState> = combine(
         preferencesFlow,
         routerAndWifiFlow,
+        mobileRepoFlow,
         repoConfigsFlow
-    ) { prefs, (router, wifiCfg, wifiDetails), (lan, sim, loc) ->
+    ) { prefs, wifiPair, (mobAdv, apn, flags), repoTuple ->
+        val (wifiCore, wifiAdv) = wifiPair
+        val (router, wifiCfg, wifiDetails, guestWifi) = wifiCore
+        val (adv24, adv5, pwr411, wps, sched) = wifiAdv
+        val (lan, staticLeases, sim, loc) = repoTuple
         val effectiveRouter = router ?: RouterState()
         val mobileData = effectiveRouter.networkModeInfo.mobileDataOn ?: effectiveRouter.cellLock.mobileDataOn
         val flightMode = effectiveRouter.networkModeInfo.flightModeOn ?: effectiveRouter.cellLock.flightModeOn
         val modeSummary = buildNetworkModeSummary(effectiveRouter)
+        val effectiveAdv = mobAdv ?: MobileAdvancedConfig(
+            networkMode = effectiveRouter.networkModeInfo.networkMode,
+            roamingEnabled = effectiveRouter.networkModeInfo.roamingEnable,
+            lteCaEnabled = effectiveRouter.networkModeInfo.lteCa,
+            nrCaEnabled = effectiveRouter.networkModeInfo.nrCa,
+            availableModes = NetworkModeCatalog.availableOptions(flags.aeraId, ""),
+            plmnLocked = flags.lockPlmnFlag
+        )
+        val modeLabel = NetworkModeCatalog.labelFor(effectiveAdv.networkMode, effectiveAdv.availableModes)
 
         SettingsHubUiState(
             routerHost = prefs.routerHost,
@@ -196,8 +302,18 @@ class SettingsHubViewModel internal constructor(
             notifyUnreachable = prefs.notifyUnreachable,
             showConnectionDialog = loc.showConnectionDialog,
             activeSheet = loc.activeSheet,
+            featureFlags = flags,
             wifiRadioConfig = wifiCfg ?: WifiRadioConfig(),
             wifiBandDetails = wifiDetails ?: WifiBandDetails(),
+            guestWifi = guestWifi,
+            wifiAdv24g = adv24,
+            wifiAdv5g = adv5,
+            wifiPower411 = pwr411,
+            wpsSnapshot = wps,
+            wpsRandomPin = loc.wpsRandomPin,
+            wpsRandomSecondsLeft = loc.wpsRandomSecondsLeft,
+            wpsPairedSuccess = loc.wpsPairedSuccess,
+            wifiSchedule = sched ?: WifiScheduleConfig(),
             wifiLoaded = wifiDetails != null || loc.wifiLoaded,
             wifiRadioLoading = loc.wifiRadioLoading,
             wifiRadioSaving = loc.wifiRadioSaving,
@@ -205,7 +321,14 @@ class SettingsHubViewModel internal constructor(
             mobileDataOn = mobileData,
             flightModeOn = flightMode,
             networkModeSummary = modeSummary,
-            roamingEnabled = effectiveRouter.networkModeInfo.roamingEnable,
+            networkModeLabel = modeLabel,
+            roamingEnabled = mobAdv?.roamingEnabled ?: effectiveRouter.networkModeInfo.roamingEnable,
+            lteCaEnabled = mobAdv?.lteCaEnabled ?: effectiveRouter.networkModeInfo.lteCa,
+            nrCaEnabled = mobAdv?.nrCaEnabled ?: effectiveRouter.networkModeInfo.nrCa,
+            mobileAdvanced = effectiveAdv,
+            mobileAdvancedLoading = loc.mobileAdvancedLoading,
+            apnConfig = apn ?: ApnConfigSnapshot(),
+            apnLoading = loc.apnLoading,
             mobileSaving = loc.mobileSaving,
             mobileMessage = loc.mobileMessage,
             simPinState = sim ?: SimPinState(),
@@ -214,6 +337,7 @@ class SettingsHubViewModel internal constructor(
             simSaving = loc.simSaving,
             simMessage = loc.simMessage,
             lanConfig = lan ?: LanConfig(),
+            staticLeases = staticLeases,
             lanLoaded = lan != null || loc.lanLoaded,
             lanLoading = loc.lanLoading,
             lanSaving = loc.lanSaving,
@@ -231,6 +355,7 @@ class SettingsHubViewModel internal constructor(
 
     fun refreshAllSettings() {
         loadWifiRadios()
+        loadMobileAdvanced()
         loadDns()
         loadSimStatus()
     }
@@ -247,21 +372,38 @@ class SettingsHubViewModel internal constructor(
         local.update {
             it.copy(
                 activeSheet = sheet,
-                wifiRadioMessage = if (sheet in setOf(ActiveSettingsSheet.EDIT_WIFI_24G, ActiveSettingsSheet.EDIT_WIFI_5G)) null else it.wifiRadioMessage,
+                wifiRadioMessage = if (sheet in setOf(
+                        ActiveSettingsSheet.EDIT_WIFI_24G,
+                        ActiveSettingsSheet.EDIT_WIFI_5G,
+                        ActiveSettingsSheet.GUEST_WIFI,
+                        ActiveSettingsSheet.WIFI_ADVANCED,
+                        ActiveSettingsSheet.WPS_SETUP,
+                        ActiveSettingsSheet.WIFI_SCHEDULE
+                    )
+                ) null else it.wifiRadioMessage,
+                mobileMessage = if (sheet in setOf(ActiveSettingsSheet.MOBILE_NETWORK_MODE, ActiveSettingsSheet.APN_EDITOR)) null else it.mobileMessage,
                 simMessage = if (sheet == ActiveSettingsSheet.SIM_PIN) null else it.simMessage,
-                lanMessage = if (sheet == ActiveSettingsSheet.LAN_DHCP) null else it.lanMessage
+                lanMessage = if (sheet in setOf(ActiveSettingsSheet.LAN_DHCP, ActiveSettingsSheet.STATIC_LEASES)) null else it.lanMessage
             )
         }
         when (sheet) {
             ActiveSettingsSheet.EDIT_WIFI_24G,
             ActiveSettingsSheet.EDIT_WIFI_5G,
             ActiveSettingsSheet.WIFI_QR -> if (!uiState.value.wifiLoaded) loadWifiRadios()
+            ActiveSettingsSheet.GUEST_WIFI -> loadGuestWifi()
+            ActiveSettingsSheet.WIFI_ADVANCED -> loadWifiAdvanced()
+            ActiveSettingsSheet.WPS_SETUP -> loadWpsStatus()
+            ActiveSettingsSheet.WIFI_SCHEDULE -> loadWifiSchedule()
+            ActiveSettingsSheet.MOBILE_NETWORK_MODE -> loadMobileAdvanced()
+            ActiveSettingsSheet.APN_EDITOR -> loadApnConfig()
             ActiveSettingsSheet.SIM_PIN -> loadSimStatus()
             ActiveSettingsSheet.LAN_DHCP -> if (!uiState.value.lanLoaded) loadDns()
+            ActiveSettingsSheet.STATIC_LEASES -> loadStaticLeases()
         }
     }
 
     fun dismissSheet() {
+        stopRandomWpsPin()
         local.update { it.copy(activeSheet = null) }
     }
 
@@ -408,6 +550,233 @@ class SettingsHubViewModel internal constructor(
         }
     }
 
+    fun loadGuestWifi() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioLoading = true, wifiRadioMessage = null) }
+            val flags = ensureFlagsLoaded()
+            val res = wifiRepository.loadGuestWifi(
+                load24g = flags.guestWifi24gAvailable,
+                load5g = flags.guestWifi5gAvailable
+            )
+            local.update {
+                it.copy(
+                    wifiRadioLoading = false,
+                    wifiRadioMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+        }
+    }
+
+    fun saveGuestWifi(band: WifiBand, config: GuestWifiBandConfig) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null) }
+            val res = wifiRepository.saveGuestWifi(band, config)
+            when (res) {
+                is RouterResult.Ok -> {
+                    val msg = "Updated ${band.label} Guest Wi-Fi"
+                    local.update { it.copy(wifiRadioSaving = false, activeSheet = null, wifiRadioMessage = msg) }
+                    emitStatusMessage(msg)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
+    fun loadWifiAdvanced() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioLoading = true, wifiRadioMessage = null) }
+            val flags = ensureFlagsLoaded()
+            val r24 = wifiRepository.loadWifiAdvanced(WifiBand.BAND_24G)
+            val r5 = wifiRepository.loadWifiAdvanced(WifiBand.BAND_5G)
+            if (flags.wifiPowerCmd411Available) {
+                wifiRepository.loadWifiPower411()
+            }
+            val err = when {
+                r24 is RouterResult.Ok || r5 is RouterResult.Ok -> null
+                r24 !is RouterResult.Ok -> r24.errorMessage()
+                else -> r5.errorMessage()
+            }
+            local.update { it.copy(wifiRadioLoading = false, wifiRadioMessage = err) }
+        }
+    }
+
+    fun saveWifiAdvanced(band: WifiBand, config: WifiAdvancedBandConfig) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null) }
+            val res = wifiRepository.saveWifiAdvanced(band, config)
+            when (res) {
+                is RouterResult.Ok -> {
+                    val msg = "Updated ${band.label} advanced radio settings"
+                    local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = msg) }
+                    emitStatusMessage(msg)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
+    fun saveWifiPower411(txPower: String) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null) }
+            val res = wifiRepository.saveWifiPower411(txPower)
+            when (res) {
+                is RouterResult.Ok -> {
+                    val msg = "Updated Wi-Fi TX coverage ($txPower%)"
+                    local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = msg) }
+                    emitStatusMessage(msg)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
+    fun loadWpsStatus() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioLoading = true, wifiRadioMessage = null) }
+            val res = wifiRepository.loadWpsStatus()
+            local.update {
+                it.copy(
+                    wifiRadioLoading = false,
+                    wifiRadioMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+        }
+    }
+
+    fun setWpsEnabled(band: WifiBand, enabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null) }
+            val res = wifiRepository.setWpsEnabled(band, enabled)
+            local.update {
+                it.copy(
+                    wifiRadioSaving = false,
+                    wifiRadioMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+            if (res is RouterResult.Ok) {
+                emitStatusMessage("WPS ${if (enabled) "enabled" else "disabled"} on ${band.label}")
+            }
+        }
+    }
+
+    fun startWpsPushButton(band: WifiBand) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null, wpsPairedSuccess = false) }
+            val res = wifiRepository.startWpsPushButton(band)
+            local.update {
+                it.copy(
+                    wifiRadioSaving = false,
+                    wifiRadioMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+            if (res is RouterResult.Ok) {
+                emitStatusMessage("WPS push-button window started on ${band.label}")
+            }
+        }
+    }
+
+    fun startWpsPin(band: WifiBand, pin: String) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null, wpsPairedSuccess = false) }
+            val res = wifiRepository.startWpsPin(band, pin)
+            local.update {
+                it.copy(
+                    wifiRadioSaving = false,
+                    wifiRadioMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+            if (res is RouterResult.Ok) {
+                emitStatusMessage("WPS enrollee PIN pairing started on ${band.label}")
+            }
+        }
+    }
+
+    fun openRandomWpsPin(band: WifiBand) {
+        wpsPollJob?.cancel()
+        wpsPollJob = viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null, wpsPairedSuccess = false) }
+            val res = wifiRepository.openRandomWpsPin(band)
+            if (res !is RouterResult.Ok) {
+                local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = res.errorMessage()) }
+                return@launch
+            }
+            val pin = res.data
+            local.update {
+                it.copy(
+                    wifiRadioSaving = false,
+                    wpsRandomPin = pin,
+                    wpsRandomSecondsLeft = 120
+                )
+            }
+            var left = 120
+            while (isActive && left > 0) {
+                if (left % 3 == 0 && left < 120) {
+                    val matched = wifiRepository.pollRandomWpsSuccess().getOrNull() == true
+                    if (matched) {
+                        local.update {
+                            it.copy(
+                                wpsRandomPin = null,
+                                wpsRandomSecondsLeft = 0,
+                                wpsPairedSuccess = true
+                            )
+                        }
+                        emitStatusMessage("WPS pairing completed")
+                        return@launch
+                    }
+                }
+                delay(1000L)
+                left--
+                local.update { it.copy(wpsRandomSecondsLeft = left) }
+            }
+            local.update { it.copy(wpsRandomPin = null, wpsRandomSecondsLeft = 0) }
+        }
+    }
+
+    fun stopRandomWpsPin() {
+        wpsPollJob?.cancel()
+        wpsPollJob = null
+        local.update { it.copy(wpsRandomPin = null, wpsRandomSecondsLeft = 0) }
+    }
+
+    fun loadWifiSchedule() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioLoading = true, wifiRadioMessage = null) }
+            val res = wifiRepository.loadWifiSchedule()
+            local.update {
+                it.copy(
+                    wifiRadioLoading = false,
+                    wifiRadioMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+        }
+    }
+
+    fun saveWifiSchedule(config: WifiScheduleConfig) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(wifiRadioSaving = true, wifiRadioMessage = null) }
+            val res = wifiRepository.saveWifiSchedule(config)
+            when (res) {
+                is RouterResult.Ok -> {
+                    val msg = if (config.enabled) "Wi-Fi schedule saved" else "Wi-Fi schedule disabled"
+                    local.update { it.copy(wifiRadioSaving = false, activeSheet = null, wifiRadioMessage = msg) }
+                    emitStatusMessage(msg)
+                }
+                else -> {
+                    local.update { it.copy(wifiRadioSaving = false, wifiRadioMessage = "Error: ${res.errorMessage()}") }
+                }
+            }
+        }
+    }
+
     fun setMobileData(on: Boolean) {
         viewModelScope.launch(ioDispatcher) {
             local.update { it.copy(mobileSaving = true, mobileMessage = null) }
@@ -432,6 +801,141 @@ class SettingsHubViewModel internal constructor(
             val res = mobileRepository.rescanNetwork()
             handleMobileResult(res)
             triggerRefresh(false)
+        }
+    }
+
+    fun loadMobileAdvanced() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileAdvancedLoading = true) }
+            val flags = ensureFlagsLoaded()
+            val res = mobileRepository.loadMobileAdvanced(flags)
+            local.update {
+                it.copy(
+                    mobileAdvancedLoading = false,
+                    mobileMessage = if (res is RouterResult.Ok) it.mobileMessage else "Error: ${res.errorMessage()}"
+                )
+            }
+        }
+    }
+
+    fun setNetworkMode(modeCode: String) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileSaving = true, mobileMessage = null) }
+            val flags = ensureFlagsLoaded()
+            when (val res = mobileRepository.setNetworkMode(modeCode, flags)) {
+                is RouterResult.Ok -> {
+                    val label = NetworkModeCatalog.labelFor(res.data.networkMode, res.data.availableModes)
+                    val msg = "Network mode set to $label"
+                    local.update { it.copy(mobileSaving = false, activeSheet = null, mobileMessage = msg) }
+                    emitStatusMessage(msg)
+                    triggerRefresh(true)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(mobileSaving = false, mobileMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
+    fun setDataRoaming(enabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileSaving = true, mobileMessage = null) }
+            val state = if (enabled) "enabled" else "disabled"
+            val res = mobileRepository.setDataRoaming(enabled).let { r ->
+                when (r) {
+                    is RouterResult.Ok -> RouterResult.Ok("Data roaming $state")
+                    is RouterResult.NotLoggedIn -> r
+                    is RouterResult.LimitedAccess -> r
+                    is RouterResult.Unreachable -> r
+                    is RouterResult.BadResponse -> r
+                }
+            }
+            handleMobileResult(res)
+            triggerRefresh(true)
+        }
+    }
+
+    fun setCarrierAggregation(lteCa: Boolean? = null, nrCa: Boolean? = null) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileSaving = true, mobileMessage = null) }
+            val res = mobileRepository.setCarrierAggregation(lteCa = lteCa, nrCa = nrCa).let { r ->
+                when (r) {
+                    is RouterResult.Ok -> RouterResult.Ok("Carrier aggregation updated")
+                    is RouterResult.NotLoggedIn -> r
+                    is RouterResult.LimitedAccess -> r
+                    is RouterResult.Unreachable -> r
+                    is RouterResult.BadResponse -> r
+                }
+            }
+            handleMobileResult(res)
+            triggerRefresh(true)
+        }
+    }
+
+    fun loadApnConfig() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(apnLoading = true) }
+            val res = mobileRepository.loadApnConfig()
+            local.update {
+                it.copy(
+                    apnLoading = false,
+                    mobileMessage = if (res is RouterResult.Ok) it.mobileMessage else "Error: ${res.errorMessage()}"
+                )
+            }
+        }
+    }
+
+    fun saveApnBasic(selectType: String, mtu: Int, natEnabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileSaving = true, mobileMessage = null) }
+            when (val res = mobileRepository.saveApnBasic(selectType, mtu, natEnabled)) {
+                is RouterResult.Ok -> {
+                    val msg = "APN protocol and MTU saved"
+                    local.update { it.copy(mobileSaving = false, mobileMessage = msg) }
+                    emitStatusMessage(msg)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(mobileSaving = false, mobileMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
+    fun saveApnProfiles(profiles: List<ApnProfile>) {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileSaving = true, mobileMessage = null) }
+            when (val res = mobileRepository.saveApnProfiles(profiles)) {
+                is RouterResult.Ok -> {
+                    val msg = "APN profiles saved"
+                    local.update { it.copy(mobileSaving = false, activeSheet = null, mobileMessage = msg) }
+                    emitStatusMessage(msg)
+                    triggerRefresh(true)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(mobileSaving = false, mobileMessage = "Error: $err") }
+                }
+            }
+        }
+    }
+
+    fun resetApnProfiles() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(mobileSaving = true, mobileMessage = null) }
+            when (val res = mobileRepository.resetApnProfiles()) {
+                is RouterResult.Ok -> {
+                    val msg = "Default APN profiles restored"
+                    local.update { it.copy(mobileSaving = false, activeSheet = null, mobileMessage = msg) }
+                    emitStatusMessage(msg)
+                    triggerRefresh(true)
+                }
+                else -> {
+                    val err = (res as? RouterResult.LimitedAccess)?.message ?: res.errorMessage()
+                    local.update { it.copy(mobileSaving = false, mobileMessage = "Error: $err") }
+                }
+            }
         }
     }
 
@@ -600,6 +1104,40 @@ class SettingsHubViewModel internal constructor(
         }
     }
 
+    fun loadStaticLeases() {
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(lanLoading = true, lanMessage = null) }
+            val res = lanRepository.loadStaticLeases()
+            local.update {
+                it.copy(
+                    lanLoading = false,
+                    lanMessage = if (res is RouterResult.Ok) null else res.errorMessage()
+                )
+            }
+        }
+    }
+
+    fun saveStaticLeases(leases: List<StaticDhcpLease>) {
+        if (local.value.lanSaving) return
+        viewModelScope.launch(ioDispatcher) {
+            local.update { it.copy(lanSaving = true, lanMessage = null) }
+            val res = lanRepository.saveStaticLeases(
+                leases = leases,
+                syncIpMacBinding = uiState.value.featureFlags.dhcpIpMacBindingSync
+            )
+            when (res) {
+                is RouterResult.Ok -> {
+                    val msg = "Static DHCP leases updated"
+                    local.update { it.copy(lanSaving = false, activeSheet = null, lanMessage = msg) }
+                    emitStatusMessage(msg)
+                }
+                else -> {
+                    local.update { it.copy(lanSaving = false, lanMessage = "Error: ${res.errorMessage()}") }
+                }
+            }
+        }
+    }
+
     fun setDiagnosisMode(mode: DiagnosisMode) {
         if (local.value.diagnosisState.isRunning) return
         local.update { it.copy(diagnosisState = it.diagnosisState.copy(mode = mode, error = null)) }
@@ -714,6 +1252,7 @@ class SettingsHubViewModel internal constructor(
 
     override fun onCleared() {
         diagnosisJob?.cancel()
+        wpsPollJob?.cancel()
     }
 
     private fun buildNetworkModeSummary(router: RouterState): String {
@@ -738,6 +1277,11 @@ class SettingsHubViewModel internal constructor(
         val wifiRadioLoading: Boolean = false,
         val wifiRadioSaving: Boolean = false,
         val wifiRadioMessage: String? = null,
+        val wpsRandomPin: String? = null,
+        val wpsRandomSecondsLeft: Int = 0,
+        val wpsPairedSuccess: Boolean = false,
+        val mobileAdvancedLoading: Boolean = false,
+        val apnLoading: Boolean = false,
         val mobileSaving: Boolean = false,
         val mobileMessage: String? = null,
         val simLoaded: Boolean = false,

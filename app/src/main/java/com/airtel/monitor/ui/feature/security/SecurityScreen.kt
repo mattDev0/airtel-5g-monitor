@@ -2,6 +2,13 @@
 
 package com.airtel.monitor.ui.feature.security
 
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Router
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VpnLock
+import com.airtel.monitor.ui.designsystem.SettingRow
+import com.airtel.monitor.ui.feature.devices.MacFilterSheet
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -221,27 +228,119 @@ fun SecurityScreen(
                     }
                 }
 
-                item(key = "sec_deferred_note") {
-                    Surface(
-                        shape = AirtelTheme.shapes.tile,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(spacing.md),
-                            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                            verticalAlignment = Alignment.Top
+                val flags = uiState.featureFlags
+                val hasAdvTools = flags.ddosAvailable || flags.upnpAvailable || flags.dmzAvailable ||
+                    flags.portForwardAvailable || flags.firewallRuleAvailable ||
+                    flags.urlFilterAvailable || flags.trustedIpAvailable
+                if (hasAdvTools) {
+                    item(key = "sec_adv_tools") {
+                        SectionCard(
+                            title = stringResource(R.string.security_adv_title),
+                            subtitle = stringResource(R.string.security_adv_subtitle)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Security,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = stringResource(R.string.security_deferred_note),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            val itemsToShow = mutableListOf<@Composable () -> Unit>()
+                            if (flags.ddosAvailable) {
+                                itemsToShow.add {
+                                    SettingSwitchRow(
+                                        title = stringResource(R.string.security_ddos_toggle),
+                                        subtitle = stringResource(R.string.security_ddos_desc),
+                                        checked = uiState.ddos.enabled,
+                                        leadingIcon = Icons.Rounded.Security,
+                                        enabled = !uiState.isSaving,
+                                        onCheckedChange = viewModel::saveDdos
+                                    )
+                                }
+                            }
+                            if (flags.upnpAvailable) {
+                                itemsToShow.add {
+                                    SettingSwitchRow(
+                                        title = stringResource(R.string.security_upnp_toggle),
+                                        subtitle = stringResource(R.string.security_upnp_desc),
+                                        checked = uiState.upnp.enabled,
+                                        leadingIcon = Icons.Rounded.Router,
+                                        enabled = !uiState.isSaving,
+                                        onCheckedChange = viewModel::saveUpnp
+                                    )
+                                }
+                            }
+                            if (flags.dmzAvailable) {
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_dmz_row),
+                                        subtitle = if (uiState.dmz.enabled && uiState.dmz.ip.isNotBlank()) {
+                                            stringResource(R.string.security_dmz_desc_fmt, uiState.dmz.ip)
+                                        } else {
+                                            stringResource(R.string.security_dmz_off)
+                                        },
+                                        leadingIcon = Icons.Rounded.Public,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.DMZ) }
+                                    )
+                                }
+                            }
+                            if (flags.portForwardAvailable) {
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_port_forward_row),
+                                        subtitle = stringResource(R.string.security_rule_count_fmt, uiState.portForward.size),
+                                        leadingIcon = Icons.Rounded.Tune,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.PORT_FORWARD) }
+                                    )
+                                }
+                            }
+                            if (flags.firewallRuleAvailable) {
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_ip_port_filter_row),
+                                        leadingIcon = Icons.Rounded.Shield,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.IP_PORT_FILTER) }
+                                    )
+                                }
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_port_filter_row),
+                                        leadingIcon = Icons.Rounded.Shield,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.PORT_FILTER) }
+                                    )
+                                }
+                            }
+                            if (flags.urlFilterAvailable) {
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_url_filter_row),
+                                        leadingIcon = Icons.Rounded.Public,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.URL_FILTER) }
+                                    )
+                                }
+                            }
+                            if (flags.firewallRuleAvailable) {
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_mac_filter_row),
+                                        leadingIcon = Icons.Rounded.Security,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.MAC_FILTER) }
+                                    )
+                                }
+                            }
+                            if (flags.trustedIpAvailable) {
+                                itemsToShow.add {
+                                    SettingRow(
+                                        title = stringResource(R.string.security_trusted_ip_row),
+                                        subtitle = if (uiState.trustedIp.enabled) {
+                                            "${uiState.trustedIp.ips.size} allowed"
+                                        } else {
+                                            stringResource(R.string.security_dmz_off)
+                                        },
+                                        leadingIcon = Icons.Rounded.VpnLock,
+                                        onClick = { viewModel.openSheet(ActiveSecuritySheet.TRUSTED_IP) }
+                                    )
+                                }
+                            }
+                            itemsToShow.forEachIndexed { idx, rowContent ->
+                                rowContent()
+                                if (idx < itemsToShow.lastIndex) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                }
+                            }
                         }
                     }
                 }
@@ -261,5 +360,80 @@ fun SecurityScreen(
             },
             onDismiss = { confirmFirewallDisable = false }
         )
+    }
+
+    when (uiState.activeSheet) {
+        ActiveSecuritySheet.DMZ -> DmzSheet(
+            config = uiState.dmz,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onSave = viewModel::saveDmz,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSecuritySheet.PORT_FORWARD -> PortForwardSheet(
+            rules = uiState.portForward,
+            systemPorts = uiState.systemPorts,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = { viewModel.refreshSheet(ActiveSecuritySheet.PORT_FORWARD) },
+            findConflict = viewModel::findSystemPortConflict,
+            onSave = viewModel::savePortForwardRules,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSecuritySheet.IP_PORT_FILTER -> IpPortFilterSheet(
+            rules = uiState.ipPortFilter,
+            acceptAll = uiState.macFilter.acceptAllIpv4,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = { viewModel.refreshSheet(ActiveSecuritySheet.IP_PORT_FILTER) },
+            onSaveRules = viewModel::saveIpPortFilterRules,
+            onSaveDefaultPolicy = viewModel::saveDefaultFilterPolicy,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSecuritySheet.PORT_FILTER -> PortFilterSheet(
+            rules = uiState.portFilter,
+            acceptAll = uiState.macFilter.acceptAllIpv4,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = { viewModel.refreshSheet(ActiveSecuritySheet.PORT_FILTER) },
+            onSaveRules = viewModel::savePortFilterRules,
+            onSaveDefaultPolicy = viewModel::saveDefaultFilterPolicy,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSecuritySheet.URL_FILTER -> UrlFilterSheet(
+            rules = uiState.urlFilter,
+            acceptAll = uiState.urlDefaultAcceptAll,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = { viewModel.refreshSheet(ActiveSecuritySheet.URL_FILTER) },
+            onSaveRules = viewModel::saveUrlFilterRules,
+            onSaveDefaultPolicy = viewModel::saveUrlDefaultPolicy,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSecuritySheet.MAC_FILTER -> MacFilterSheet(
+            snapshot = uiState.macFilter,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = { viewModel.refreshSheet(ActiveSecuritySheet.MAC_FILTER) },
+            onSaveRules = viewModel::saveMacFilterRules,
+            onSaveDefaultPolicy = viewModel::saveDefaultFilterPolicy,
+            onDismiss = viewModel::dismissSheet
+        )
+        ActiveSecuritySheet.TRUSTED_IP -> TrustedIpSheet(
+            config = uiState.trustedIp,
+            isLoading = uiState.sheetBusy,
+            isSaving = uiState.sheetBusy,
+            errorMessage = uiState.sheetError,
+            onRefresh = { viewModel.refreshSheet(ActiveSecuritySheet.TRUSTED_IP) },
+            onSave = viewModel::saveTrustedIps,
+            onDismiss = viewModel::dismissSheet
+        )
+        null -> Unit
     }
 }

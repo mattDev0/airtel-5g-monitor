@@ -172,6 +172,7 @@ fun parseMonthlyUsage(
         when {
             limitUnit == "mb" || limitUnit == "m" || limitUnit == "0" -> value
             limitUnit == "gb" || limitUnit == "g" || limitUnit == "1" -> value * 1024.0
+            limitUnit == "tb" || limitUnit == "t" || limitUnit == "2" -> value * 1024.0 * 1024.0
             value > 10_000.0 -> value
             else -> value * 1024.0
         }

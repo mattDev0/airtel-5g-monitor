@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Router
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Wifi
@@ -68,6 +69,7 @@ import com.airtel.monitor.ui.designsystem.SectionCard
 import com.airtel.monitor.ui.designsystem.SettingRow
 import com.airtel.monitor.ui.designsystem.SettingSwitchRow
 import com.airtel.monitor.ui.designsystem.SettingValueRow
+import com.airtel.monitor.ui.feature.devices.StaticLeasesSheet
 import com.airtel.monitor.ui.theme.AirtelTheme
 import com.airtel.monitor.work.RouterMonitorScheduler
 
@@ -202,6 +204,44 @@ fun SettingsHubScreen(
                     leadingIcon = Icons.Rounded.QrCode2,
                     onClick = { viewModel.openSheet(ActiveSettingsSheet.WIFI_QR) }
                 )
+                if (uiState.featureFlags.guestWifi24gAvailable || uiState.featureFlags.guestWifi5gAvailable) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    SettingRow(
+                        title = stringResource(R.string.settings_wifi_guest_title),
+                        subtitle = stringResource(R.string.settings_wifi_guest_subtitle),
+                        leadingIcon = Icons.Rounded.Wifi,
+                        enabled = !uiState.wifiRadioSaving,
+                        onClick = { viewModel.openSheet(ActiveSettingsSheet.GUEST_WIFI) }
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingRow(
+                    title = stringResource(R.string.settings_wifi_advanced_title),
+                    subtitle = stringResource(R.string.settings_wifi_advanced_subtitle),
+                    leadingIcon = Icons.Rounded.Tune,
+                    enabled = !uiState.wifiRadioSaving,
+                    onClick = { viewModel.openSheet(ActiveSettingsSheet.WIFI_ADVANCED) }
+                )
+                if (uiState.featureFlags.wpsAvailable) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    SettingRow(
+                        title = stringResource(R.string.settings_wifi_wps_title),
+                        subtitle = stringResource(R.string.settings_wifi_wps_subtitle),
+                        leadingIcon = Icons.Rounded.QrCode2,
+                        enabled = !uiState.wifiRadioSaving,
+                        onClick = { viewModel.openSheet(ActiveSettingsSheet.WPS_SETUP) }
+                    )
+                }
+                if (uiState.featureFlags.wifiScheduleAvailable) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    SettingRow(
+                        title = stringResource(R.string.settings_wifi_schedule_title),
+                        subtitle = stringResource(R.string.settings_wifi_schedule_subtitle),
+                        leadingIcon = Icons.Rounded.Schedule,
+                        enabled = !uiState.wifiRadioSaving,
+                        onClick = { viewModel.openSheet(ActiveSettingsSheet.WIFI_SCHEDULE) }
+                    )
+                }
 
                 if (!uiState.wifiRadioMessage.isNullOrBlank()) {
                     val isErr = uiState.wifiRadioMessage!!.startsWith("Error:") ||
@@ -213,13 +253,6 @@ fun SettingsHubScreen(
                         modifier = Modifier.padding(top = spacing.xs)
                     )
                 }
-
-                Text(
-                    text = stringResource(R.string.settings_wifi_deferred_note),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = spacing.xs)
-                )
             }
         }
 
@@ -229,11 +262,14 @@ fun SettingsHubScreen(
                 subtitle = stringResource(R.string.settings_mobile_section_subtitle),
                 trailing = {
                     IconButton(
-                        onClick = viewModel::loadSimStatus,
-                        enabled = !uiState.simLoading && !uiState.simSaving,
+                        onClick = {
+                            viewModel.loadSimStatus()
+                            viewModel.loadMobileAdvanced()
+                        },
+                        enabled = !uiState.simLoading && !uiState.simSaving && !uiState.mobileAdvancedLoading,
                         modifier = Modifier.size(36.dp)
                     ) {
-                        if (uiState.simLoading) {
+                        if (uiState.simLoading || uiState.mobileAdvancedLoading) {
                             LoadingIndicator(modifier = Modifier.size(20.dp))
                         } else {
                             Icon(
@@ -272,21 +308,64 @@ fun SettingsHubScreen(
                         }
                     }
                 )
+                if (uiState.featureFlags.networkSetAvailable) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    SettingRow(
+                        title = stringResource(R.string.settings_mobile_mode_label),
+                        subtitle = if (uiState.mobileAdvanced.plmnLocked) {
+                            stringResource(R.string.settings_mobile_plmn_locked_note)
+                        } else {
+                            uiState.networkModeSummary
+                        },
+                        trailingValue = uiState.networkModeLabel,
+                        leadingIcon = Icons.Rounded.Tune,
+                        enabled = !uiState.mobileSaving,
+                        onClick = { viewModel.openSheet(ActiveSettingsSheet.MOBILE_NETWORK_MODE) }
+                    )
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                SettingValueRow(
-                    label = stringResource(R.string.settings_mobile_mode_label),
-                    value = buildString {
-                        append(uiState.networkModeSummary)
-                        append(" · ")
-                        append(
-                            if (uiState.roamingEnabled) {
-                                stringResource(R.string.settings_mobile_roaming_on)
-                            } else {
-                                stringResource(R.string.settings_mobile_roaming_off)
-                            }
-                        )
-                    }
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_mobile_roaming_toggle),
+                    subtitle = stringResource(R.string.settings_mobile_roaming_desc),
+                    checked = uiState.roamingEnabled,
+                    enabled = !uiState.mobileSaving,
+                    onCheckedChange = { viewModel.setDataRoaming(it) }
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_mobile_lte_ca_toggle),
+                    subtitle = stringResource(R.string.settings_mobile_lte_ca_desc),
+                    checked = uiState.lteCaEnabled,
+                    enabled = !uiState.mobileSaving,
+                    onCheckedChange = { viewModel.setCarrierAggregation(lteCa = it) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_mobile_nr_ca_toggle),
+                    subtitle = stringResource(R.string.settings_mobile_nr_ca_desc),
+                    checked = uiState.nrCaEnabled,
+                    enabled = !uiState.mobileSaving,
+                    onCheckedChange = { viewModel.setCarrierAggregation(nrCa = it) }
+                )
+                if (uiState.featureFlags.apnAvailable) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    SettingRow(
+                        title = stringResource(R.string.settings_mobile_apn_title),
+                        subtitle = buildString {
+                            append(uiState.apnConfig.selectType)
+                            append(" · MTU ")
+                            append(uiState.apnConfig.mtu)
+                            val defApn = uiState.apnConfig.profiles.firstOrNull { it.isDefault }?.apnName
+                            if (!defApn.isNullOrBlank()) {
+                                append(" · ")
+                                append(defApn)
+                            }
+                        },
+                        leadingIcon = Icons.Rounded.Dns,
+                        enabled = !uiState.mobileSaving,
+                        onClick = { viewModel.openSheet(ActiveSettingsSheet.APN_EDITOR) }
+                    )
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 SettingRow(
                     title = stringResource(R.string.signal_rescan_network),
@@ -312,13 +391,6 @@ fun SettingsHubScreen(
                         modifier = Modifier.padding(top = spacing.xs)
                     )
                 }
-
-                Text(
-                    text = stringResource(R.string.settings_mobile_deferred_note),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = spacing.xs)
-                )
             }
         }
 
@@ -377,6 +449,14 @@ fun SettingsHubScreen(
                     leadingIcon = Icons.Rounded.Dns,
                     enabled = !uiState.lanSaving,
                     onClick = { viewModel.openSheet(ActiveSettingsSheet.LAN_DHCP) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingRow(
+                    title = stringResource(R.string.settings_lan_static_leases_title),
+                    subtitle = stringResource(R.string.settings_lan_static_leases_subtitle),
+                    leadingIcon = Icons.Rounded.Dns,
+                    enabled = !uiState.lanSaving,
+                    onClick = { viewModel.openSheet(ActiveSettingsSheet.STATIC_LEASES) }
                 )
 
                 if (!uiState.lanMessage.isNullOrBlank()) {
@@ -668,6 +748,84 @@ fun SettingsHubScreen(
                 onDismiss = viewModel::dismissSheet
             )
         }
+        ActiveSettingsSheet.GUEST_WIFI -> {
+            GuestWifiSheet(
+                snapshot = uiState.guestWifi,
+                featureFlags = uiState.featureFlags,
+                isLoading = uiState.wifiRadioLoading,
+                isSaving = uiState.wifiRadioSaving,
+                errorMessage = uiState.wifiRadioMessage,
+                onRefresh = viewModel::loadGuestWifi,
+                onSave = viewModel::saveGuestWifi,
+                onDismiss = viewModel::dismissSheet
+            )
+        }
+        ActiveSettingsSheet.WIFI_ADVANCED -> {
+            WifiAdvancedSheet(
+                adv24g = uiState.wifiAdv24g,
+                adv5g = uiState.wifiAdv5g,
+                power411 = uiState.wifiPower411,
+                featureFlags = uiState.featureFlags,
+                isLoading = uiState.wifiRadioLoading,
+                isSaving = uiState.wifiRadioSaving,
+                errorMessage = uiState.wifiRadioMessage,
+                onRefresh = viewModel::loadWifiAdvanced,
+                onSaveBand = viewModel::saveWifiAdvanced,
+                onSavePower411 = viewModel::saveWifiPower411,
+                onDismiss = viewModel::dismissSheet
+            )
+        }
+        ActiveSettingsSheet.WPS_SETUP -> {
+            WpsSheet(
+                snapshot = uiState.wpsSnapshot,
+                randomPin = uiState.wpsRandomPin,
+                secondsLeft = uiState.wpsRandomSecondsLeft,
+                pairedSuccess = uiState.wpsPairedSuccess,
+                isLoading = uiState.wifiRadioLoading,
+                isSaving = uiState.wifiRadioSaving,
+                errorMessage = uiState.wifiRadioMessage,
+                onRefresh = viewModel::loadWpsStatus,
+                onSetWpsEnabled = viewModel::setWpsEnabled,
+                onPushButton = viewModel::startWpsPushButton,
+                onSubmitPin = viewModel::startWpsPin,
+                onGenerateRandomPin = viewModel::openRandomWpsPin,
+                onStopRandomPin = viewModel::stopRandomWpsPin,
+                onDismiss = viewModel::dismissSheet
+            )
+        }
+        ActiveSettingsSheet.WIFI_SCHEDULE -> {
+            WifiScheduleSheet(
+                config = uiState.wifiSchedule,
+                isLoading = uiState.wifiRadioLoading,
+                isSaving = uiState.wifiRadioSaving,
+                errorMessage = uiState.wifiRadioMessage,
+                onRefresh = viewModel::loadWifiSchedule,
+                onSave = viewModel::saveWifiSchedule,
+                onDismiss = viewModel::dismissSheet
+            )
+        }
+        ActiveSettingsSheet.MOBILE_NETWORK_MODE -> {
+            NetworkModeSheet(
+                config = uiState.mobileAdvanced,
+                isLoading = uiState.mobileAdvancedLoading,
+                isSaving = uiState.mobileSaving,
+                statusMessage = uiState.mobileMessage,
+                onDismiss = viewModel::dismissSheet,
+                onSelectMode = viewModel::setNetworkMode
+            )
+        }
+        ActiveSettingsSheet.APN_EDITOR -> {
+            ApnEditorSheet(
+                config = uiState.apnConfig,
+                isLoading = uiState.apnLoading,
+                isSaving = uiState.mobileSaving,
+                statusMessage = uiState.mobileMessage,
+                onDismiss = viewModel::dismissSheet,
+                onSaveBasic = viewModel::saveApnBasic,
+                onSaveProfiles = viewModel::saveApnProfiles,
+                onResetProfiles = viewModel::resetApnProfiles
+            )
+        }
         ActiveSettingsSheet.SIM_PIN -> {
             SimPinSheet(
                 state = uiState.simPinState,
@@ -689,6 +847,17 @@ fun SettingsHubScreen(
                 errorMessage = uiState.lanMessage,
                 onDismiss = viewModel::dismissSheet,
                 onSave = viewModel::saveLanDhcpSettings
+            )
+        }
+        ActiveSettingsSheet.STATIC_LEASES -> {
+            StaticLeasesSheet(
+                leases = uiState.staticLeases,
+                isLoading = uiState.lanLoading,
+                isSaving = uiState.lanSaving,
+                errorMessage = uiState.lanMessage,
+                onRefresh = viewModel::loadStaticLeases,
+                onSave = viewModel::saveStaticLeases,
+                onDismiss = viewModel::dismissSheet
             )
         }
         null -> Unit

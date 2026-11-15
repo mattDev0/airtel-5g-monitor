@@ -52,7 +52,8 @@ class PreferencesRepository private constructor(
         notifyQuotaWarning: Boolean? = null,
         notifyNewSms: Boolean? = null,
         notifyNewDevice: Boolean? = null,
-        notifyUnreachable: Boolean? = null
+        notifyUnreachable: Boolean? = null,
+        ussdShortcuts: List<String>? = null
     ) = store.updateSettings(
         host = host,
         user = user,
@@ -66,7 +67,8 @@ class PreferencesRepository private constructor(
         notifyQuotaWarning = notifyQuotaWarning,
         notifyNewSms = notifyNewSms,
         notifyNewDevice = notifyNewDevice,
-        notifyUnreachable = notifyUnreachable
+        notifyUnreachable = notifyUnreachable,
+        ussdShortcuts = ussdShortcuts
     )
 
     companion object {

@@ -60,9 +60,17 @@ import androidx.compose.ui.unit.dp
 import com.airtel.monitor.R
 import com.airtel.monitor.data.model.LogGrade
 import com.airtel.monitor.data.model.LogSettingsConfig
+import com.airtel.monitor.data.model.RouterTimeConfig
 import com.airtel.monitor.data.model.ScheduledRebootConfig
+import com.airtel.monitor.data.model.WanLinkDetectConfig
+import com.airtel.monitor.ui.designsystem.ConfirmSheet
+import com.airtel.monitor.ui.designsystem.ConfirmTier
+import com.airtel.monitor.ui.designsystem.SectionCard
 import com.airtel.monitor.ui.designsystem.SettingSwitchRow
 import com.airtel.monitor.ui.theme.AirtelTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ScheduledRebootSheet(
@@ -503,5 +511,492 @@ fun ChangePasswordSheet(
                 }
             }
         }
+    }
+}
+
+private val COMMON_TIMEZONES = listOf(
+    "UTC0" to "GMT+00:00",
+    "UTC-1" to "GMT+01:00 (WAT)",
+    "UTC-2" to "GMT+02:00",
+    "UTC-3" to "GMT+03:00",
+    "UTC-5:30" to "GMT+05:30",
+    "UTC-8" to "GMT+08:00",
+    "UTC5" to "GMT-05:00",
+    "UTC8" to "GMT-08:00"
+)
+
+@Composable
+fun RouterTimeSheet(
+    config: RouterTimeConfig?,
+    isLoading: Boolean,
+    isSaving: Boolean,
+    errorMessage: String?,
+    onRefresh: () -> Unit,
+    onSave: (RouterTimeConfig, String) -> Unit,
+    onSyncPhoneTime: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val spacing = AirtelTheme.spacing
+    val colors = AirtelTheme.colors
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
+    var timezone by remember(config) { mutableStateOf(config?.timezone?.ifBlank { "UTC-8" } ?: "UTC-8") }
+    var ntpEnabled by remember(config) { mutableStateOf(config?.ntpEnabled ?: true) }
+    var s1 by remember(config) { mutableStateOf(config?.server1 ?: "") }
+    var s2 by remember(config) { mutableStateOf(config?.server2 ?: "") }
+    var s3 by remember(config) { mutableStateOf(config?.server3 ?: "") }
+    var s4 by remember(config) { mutableStateOf(config?.server4 ?: "") }
+    var manualTime by remember {
+        mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = AirtelTheme.shapes.sheet,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.lg)
+                .padding(bottom = spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(spacing.md)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.system_time_sheet_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isLoading || isSaving) {
+                    LoadingIndicator(modifier = Modifier.size(20.dp))
+                } else {
+                    IconButton(onClick = onRefresh) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.cd_refresh_settings))
+                    }
+                }
+            }
+
+            if (!config?.systemTime.isNullOrBlank()) {
+                Text(
+                    text = "${stringResource(R.string.system_router_time)}: ${config?.systemTime}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.system_time_timezone),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(spacing.xs)
+            ) {
+                COMMON_TIMEZONES.forEach { (wire, label) ->
+                    FilterChip(
+                        selected = timezone.replace(Regex("_\\d+$"), "") == wire,
+                        onClick = { timezone = wire },
+                        enabled = !isSaving,
+                        label = { Text(label) }
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = timezone,
+                onValueChange = { timezone = it },
+                label = { Text("Timezone Wire Value (e.g. UTC-1)") },
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            SettingSwitchRow(
+                title = stringResource(R.string.system_time_ntp_enable),
+                checked = ntpEnabled,
+                enabled = !isSaving,
+                onCheckedChange = { ntpEnabled = it }
+            )
+
+            if (ntpEnabled) {
+                OutlinedTextField(
+                    value = s1,
+                    onValueChange = { s1 = it },
+                    label = { Text("NTP Server 1") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = s2,
+                    onValueChange = { s2 = it },
+                    label = { Text("NTP Server 2") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = s3,
+                    onValueChange = { s3 = it },
+                    label = { Text("NTP Server 3") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = s4,
+                    onValueChange = { s4 = it },
+                    label = { Text("NTP Server 4") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            OutlinedTextField(
+                value = manualTime,
+                onValueChange = { manualTime = it },
+                label = { Text("Clock (yyyy-MM-dd HH:mm:ss)") },
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedButton(
+                onClick = {
+                    val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+                    manualTime = now
+                    onSyncPhoneTime(now)
+                },
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.system_time_sync_phone))
+            }
+
+            if (!errorMessage.isNullOrBlank()) {
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm)
+            ) {
+                TextButton(
+                    onClick = onDismiss,
+                    enabled = !isSaving,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+                Button(
+                    onClick = {
+                        onSave(
+                            RouterTimeConfig(
+                                systemTime = config?.systemTime.orEmpty(),
+                                timezone = timezone.trim(),
+                                ntpEnabled = ntpEnabled,
+                                server1 = s1.trim(),
+                                server2 = s2.trim(),
+                                server3 = s3.trim(),
+                                server4 = s4.trim()
+                            ),
+                            manualTime.trim()
+                        )
+                    },
+                    enabled = !isSaving,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.action_save))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WanLinkDetectSheet(
+    config: WanLinkDetectConfig?,
+    rescanAllowed: Boolean,
+    isLoading: Boolean,
+    isSaving: Boolean,
+    errorMessage: String?,
+    onRefresh: () -> Unit,
+    onSave: (WanLinkDetectConfig) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val spacing = AirtelTheme.spacing
+    val colors = AirtelTheme.colors
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
+    val lockedMix = config?.isMixMode == true
+    var enabled by remember(config) { mutableStateOf(lockedMix || (config?.enabled ?: false)) }
+    var checkMode by remember(config) { mutableStateOf(config?.checkMode ?: 0) }
+    var checkTimeText by remember(config) { mutableStateOf((config?.checkTimeSec ?: 10).toString()) }
+    var ip1 by remember(config) { mutableStateOf(config?.ip1 ?: "") }
+    var ip2 by remember(config) { mutableStateOf(config?.ip2 ?: "") }
+    var ip3 by remember(config) { mutableStateOf(config?.ip3 ?: "") }
+    var action by remember(config) { mutableStateOf(config?.action ?: "0") }
+    var rebootWaitText by remember(config) { mutableStateOf((config?.rebootWaitMinutes ?: 3).toString()) }
+    var rescanText by remember(config) { mutableStateOf((config?.rescanNetworkSec ?: 10).toString()) }
+    var v4DnsSw by remember(config) { mutableStateOf(config?.ipv4DnsSw ?: false) }
+    var v4Dns1 by remember(config) { mutableStateOf(config?.ipv4Dns1 ?: "") }
+    var v6DnsSw by remember(config) { mutableStateOf(config?.ipv6DnsSw ?: false) }
+    var v6Dns1 by remember(config) { mutableStateOf(config?.ipv6Dns1 ?: "") }
+    var localError by remember { mutableStateOf<String?>(null) }
+    var pendingConfirm by remember { mutableStateOf<WanLinkDetectConfig?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = AirtelTheme.shapes.sheet,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.lg)
+                .padding(bottom = spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(spacing.md)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.system_wan_detect_sheet_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isLoading || isSaving) {
+                    LoadingIndicator(modifier = Modifier.size(20.dp))
+                } else {
+                    IconButton(onClick = onRefresh) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.cd_refresh_settings))
+                    }
+                }
+            }
+
+            SettingSwitchRow(
+                title = stringResource(R.string.system_wan_detect_enable),
+                subtitle = if (lockedMix) stringResource(R.string.system_wan_detect_mix_note) else null,
+                checked = if (lockedMix) true else enabled,
+                enabled = !lockedMix && !isSaving,
+                onCheckedChange = { enabled = it }
+            )
+
+            Text(
+                text = "Probe Method",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.xs)) {
+                listOf(0 to "Auto / ICMP", 2 to "NTP", 3 to "DNS").forEach { (idx, label) ->
+                    FilterChip(
+                        selected = checkMode == idx,
+                        onClick = { checkMode = idx },
+                        enabled = !isSaving,
+                        label = { Text(label) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = checkTimeText,
+                onValueChange = { checkTimeText = it; localError = null },
+                label = { Text(stringResource(R.string.system_wan_detect_interval)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = ip1,
+                onValueChange = { ip1 = it; localError = null },
+                label = { Text("Probe Host 1 (required)") },
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = ip2,
+                onValueChange = { ip2 = it; localError = null },
+                label = { Text("Probe Host 2 (optional)") },
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = ip3,
+                onValueChange = { ip3 = it; localError = null },
+                label = { Text("Probe Host 3 (optional)") },
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                text = stringResource(R.string.system_wan_detect_action),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.xs)) {
+                val actions = buildList {
+                    add("0" to if (lockedMix) "Switch SIM/WAN" else "Check Only")
+                    add("1" to "Reboot Router")
+                    if (rescanAllowed) add("3" to "Rescan Network")
+                }
+                actions.forEach { (code, label) ->
+                    FilterChip(
+                        selected = action == code,
+                        onClick = { action = code },
+                        enabled = !isSaving,
+                        label = { Text(label) }
+                    )
+                }
+            }
+
+            if (action == "1") {
+                OutlinedTextField(
+                    value = rebootWaitText,
+                    onValueChange = { rebootWaitText = it; localError = null },
+                    label = { Text(stringResource(R.string.system_wan_detect_reboot_mins)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else if (action == "3" && rescanAllowed) {
+                OutlinedTextField(
+                    value = rescanText,
+                    onValueChange = { rescanText = it; localError = null },
+                    label = { Text(stringResource(R.string.system_wan_detect_rescan_sec)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            SectionCard(title = "DNS Health Overrides (optional)") {
+                SettingSwitchRow(
+                    title = "Custom IPv4 probe DNS",
+                    checked = v4DnsSw,
+                    enabled = !isSaving,
+                    onCheckedChange = { v4DnsSw = it }
+                )
+                if (v4DnsSw) {
+                    OutlinedTextField(
+                        value = v4Dns1,
+                        onValueChange = { v4Dns1 = it; localError = null },
+                        label = { Text("IPv4 DNS 1") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                SettingSwitchRow(
+                    title = "Custom IPv6 probe DNS",
+                    checked = v6DnsSw,
+                    enabled = !isSaving,
+                    onCheckedChange = { v6DnsSw = it }
+                )
+                if (v6DnsSw) {
+                    OutlinedTextField(
+                        value = v6Dns1,
+                        onValueChange = { v6Dns1 = it; localError = null },
+                        label = { Text("IPv6 DNS 1") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            val shownError = localError ?: errorMessage
+            if (!shownError.isNullOrBlank()) {
+                Text(
+                    text = shownError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm)
+            ) {
+                TextButton(
+                    onClick = onDismiss,
+                    enabled = !isSaving,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+                Button(
+                    onClick = {
+                        val interval = checkTimeText.trim().toIntOrNull()
+                        val rebootWait = rebootWaitText.trim().toIntOrNull()
+                        val rescanSec = rescanText.trim().toIntOrNull()
+                        if (interval == null || rebootWait == null || rescanSec == null) {
+                            localError = "Numeric timing values required"
+                            return@Button
+                        }
+                        pendingConfirm = WanLinkDetectConfig(
+                            enabled = if (lockedMix) true else enabled,
+                            isMixMode = lockedMix,
+                            networkMode = config?.networkMode.orEmpty(),
+                            checkTimeSec = interval,
+                            checkMode = checkMode,
+                            ip1 = ip1.trim(),
+                            ip2 = ip2.trim(),
+                            ip3 = ip3.trim(),
+                            action = action,
+                            rebootWaitMinutes = rebootWait,
+                            rescanNetworkSec = rescanSec,
+                            ipv4DnsSw = v4DnsSw,
+                            ipv4Dns1 = v4Dns1.trim(),
+                            ipv4Dns2 = config?.ipv4Dns2.orEmpty(),
+                            ipv4Dns3 = config?.ipv4Dns3.orEmpty(),
+                            ipv6DnsSw = v6DnsSw,
+                            ipv6Dns1 = v6Dns1.trim(),
+                            ipv6Dns2 = config?.ipv6Dns2.orEmpty(),
+                            ipv6Dns3 = config?.ipv6Dns3.orEmpty()
+                        )
+                    },
+                    enabled = !isSaving,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.action_save))
+                }
+            }
+        }
+    }
+
+    pendingConfirm?.let { next ->
+        ConfirmSheet(
+            title = stringResource(R.string.system_wan_detect_sheet_title),
+            impactMessage = stringResource(R.string.system_wan_detect_subtitle),
+            confirmLabel = stringResource(R.string.action_save),
+            tier = ConfirmTier.CONNECTIVITY,
+            onConfirm = {
+                pendingConfirm = null
+                onSave(next)
+            },
+            onDismiss = { pendingConfirm = null }
+        )
     }
 }

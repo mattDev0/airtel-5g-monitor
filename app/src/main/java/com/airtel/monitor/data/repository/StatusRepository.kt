@@ -39,7 +39,8 @@ class StatusRepository(
     private val session: RouterSession,
     private val aliasLookup: AliasLookup,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val dailyUsageStore: DailyUsageStore? = null
+    private val dailyUsageStore: DailyUsageStore? = null,
+    private val featureFlagRepository: FeatureFlagRepository? = null
 ) {
     private val _routerState = MutableStateFlow<RouterState?>(null)
     val routerState: StateFlow<RouterState?> = _routerState.asStateFlow()
@@ -116,11 +117,18 @@ class StatusRepository(
         peakUlMbps = 0.0
         _connectionStatus.value = ConnectionStatus.CONNECTING
         _lastError.value = null
+        featureFlagRepository?.reset()
     }
 
     fun updateCachedNetMode218(json: JSONObject) {
         if (json.has("flightMode")) {
             cachedNetMode218 = json
+        }
+    }
+
+    fun updateCachedTraffic337(json: JSONObject) {
+        if (json.length() > 1 && json.optBoolean("success", true)) {
+            cachedTraffic337 = json
         }
     }
 
@@ -430,5 +438,7 @@ class StatusRepository(
             cachedStatusBar394 = bar
             _smsUnreadCount.value = parseSmsUnreadCount(bar)
         }
+
+        featureFlagRepository?.ensureLoaded()
     }
 }
