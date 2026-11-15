@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "cmd": 337,
+  "limitSwitch": "1",
+  "limitSize": "500",
+  "flow_limit_unit": "GB",
+  "startDate": "10",
+  "warn_percentage": "80",
+  "dl_mon_flow": "210000",
+  "ul_mon_flow": "54366.45"
+}

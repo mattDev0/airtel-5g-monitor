@@ -63,6 +63,69 @@
     <string name="signal_carriers_empty">Waiting for serving cell details from router</string>
     <string name="signal_manage_locks">Manage Band &amp; Cell Lock</string>
 
+    <!-- Home screen (Phase 1) -->
+    <string name="home_online_duration">Online</string>
+    <string name="home_wan_ip">WAN IP</string>
+    <string name="home_throughput_title">Live Throughput</string>
+    <string name="home_throughput_sparkline_desc">60-second download and upload history</string>
+    <string name="home_usage_title">Monthly Data Usage</string>
+    <string name="home_usage_used_fmt">%1$s used</string>
+    <string name="home_usage_limit_fmt">%1$s / %2$s limit</string>
+    <string name="home_usage_days_left_fmt">%1$d days left in cycle</string>
+    <string name="home_usage_no_limit">No monthly limit configured</string>
+    <string name="home_usage_cycle_day_fmt">Cycle starts day %1$d</string>
+    <string name="home_usage_tap_hint">Monthly usage details and limits are scheduled for Phase 4</string>
+    <string name="home_toggles_title">Quick Controls</string>
+    <string name="toggle_mobile_data">Mobile Data</string>
+    <string name="toggle_wifi_24g">Wi-Fi 2.4 GHz</string>
+    <string name="toggle_wifi_5g">Wi-Fi 5 GHz</string>
+    <string name="toggle_flight_mode">Flight Mode</string>
+    <string name="confirm_mobile_data_off_title">Turn off mobile data?</string>
+    <string name="confirm_mobile_data_off_impact">Internet access drops for all connected devices until you turn mobile data back on. Wi-Fi and this app keep working.</string>
+    <string name="confirm_wifi_off_title">Turn off %1$s Wi-Fi?</string>
+    <string name="confirm_wifi_off_impact">Devices on %1$s will disconnect immediately and must use the other band. Turning both bands off is blocked to prevent lockout.</string>
+    <string name="confirm_flight_mode_on_title">Enable flight mode?</string>
+    <string name="confirm_flight_mode_on_impact">Cellular radios turn off and internet access drops until flight mode is disabled.</string>
+    <string name="confirm_turn_off">Turn Off</string>
+    <string name="confirm_enable">Enable</string>
+    <string name="home_tiles_title">At a Glance</string>
+    <string name="tile_devices_online">Devices Online</string>
+    <string name="tile_messages">Messages</string>
+    <string name="tile_messages_unread_fmt">%1$d unread</string>
+    <string name="tile_messages_none">No unread</string>
+    <string name="tile_temp_cpu">Temp &amp; CPU</string>
+    <string name="tile_uptime">Router Uptime</string>
+
+    <!-- Signal screen & Alignment mode (Phase 1) -->
+    <string name="signal_open_alignment">Antenna Alignment Mode</string>
+    <string name="signal_open_locks">Band &amp; Cell Lock</string>
+    <string name="signal_rescan_network">Re-search Network</string>
+    <string name="confirm_rescan_title">Re-search mobile network?</string>
+    <string name="confirm_rescan_impact">The modem scans bands and re-registers with the carrier. Internet drops for about 1 minute.</string>
+    <string name="confirm_rescan_button">Re-search</string>
+    <string name="signal_meters_4g">4G LTE Signal Quality</string>
+    <string name="signal_meters_5g">5G NR Signal Quality</string>
+    <string name="signal_link_details_title">Link Details</string>
+    <string name="signal_cell_identity_title">Cell Identity</string>
+    <string name="signal_cell_identity_hint">Long-press any value to copy</string>
+    <string name="copied_to_clipboard_fmt">Copied %1$s to clipboard</string>
+    <string name="signal_history_title">Signal History (~10 min)</string>
+    <string name="signal_history_empty">Waiting for 1018 history samples</string>
+    <string name="signal_history_legend_rsrp">RSRP (dBm)</string>
+    <string name="signal_history_legend_sinr">SINR (dB)</string>
+    <string name="signal_neighbors_title">Neighbour Cells</string>
+    <string name="signal_neighbors_refresh">Refresh neighbours</string>
+    <string name="signal_radio_mode_title">Radio Mode &amp; Carrier Aggregation</string>
+    <string name="signal_radio_mode_readonly_note">Read-only from cmd 218 (mode/CA switching awaits router web UI write schema)</string>
+    <string name="alignment_title">Antenna Alignment</string>
+    <string name="alignment_subtitle">Polling cmd 205 every 1s · Keep screen on</string>
+    <string name="alignment_best_sinr">Best SINR</string>
+    <string name="alignment_best_rsrp">Best RSRP</string>
+    <string name="alignment_reset_best">Reset best</string>
+    <string name="alignment_sound_on">Tone on</string>
+    <string name="alignment_sound_muted">Muted</string>
+    <string name="cd_back">Navigate back</string>
+
     <!-- Reboot confirmation -->
     <string name="reboot_confirm_title">Reboot Router?</string>
     <string name="reboot_confirm_impact">This restarts the ZLT X17M 5G router. Internet connectivity will drop for 1–2 minutes.</string>

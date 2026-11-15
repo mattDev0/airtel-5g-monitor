@@ -1,8 +1,13 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    androidx.compose.animation.ExperimentalSharedTransitionApi::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 
 package com.airtel.monitor.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +65,7 @@ import com.airtel.monitor.ui.feature.home.HomeScreen
 import com.airtel.monitor.ui.feature.home.HomeViewModel
 import com.airtel.monitor.ui.feature.settings.SettingsHubScreen
 import com.airtel.monitor.ui.feature.settings.SettingsHubViewModel
+import com.airtel.monitor.ui.feature.signal.AlignmentScreen
 import com.airtel.monitor.ui.feature.signal.SignalScreen
 import com.airtel.monitor.ui.feature.signal.SignalViewModel
 import com.airtel.monitor.ui.theme.AirtelTheme
@@ -82,6 +88,7 @@ fun AppShell(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val isAlignmentFullScreen = currentDestination?.hasRoute(AlignmentRoute::class) == true
     val selectedTab = when {
         currentDestination?.hasRoute(SignalRoute::class) == true -> TopLevelDestination.SIGNAL
         currentDestination?.hasRoute(DevicesRoute::class) == true -> TopLevelDestination.DEVICES
@@ -102,8 +109,12 @@ fun AppShell(
     val adaptiveLayoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(
         currentWindowAdaptiveInfo()
     )
-    val useFloatingBottomBar = adaptiveLayoutType == NavigationSuiteType.NavigationBar
-    val suiteLayoutType = if (useFloatingBottomBar) NavigationSuiteType.None else adaptiveLayoutType
+    val useFloatingBottomBar = !isAlignmentFullScreen && adaptiveLayoutType == NavigationSuiteType.NavigationBar
+    val suiteLayoutType = if (isAlignmentFullScreen || useFloatingBottomBar) {
+        NavigationSuiteType.None
+    } else {
+        adaptiveLayoutType
+    }
 
     NavigationSuiteScaffold(
         layoutType = suiteLayoutType,
@@ -137,30 +148,32 @@ fun AppShell(
                     .padding(innerPadding)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    HeaderBar(
-                        connectionStatus = shellState.connectionStatus,
-                        isPaused = shellState.isPaused,
-                        pollInterval = shellState.pollIntervalSeconds,
-                        routerHost = shellState.routerHost,
-                        smsUnreadCount = shellState.smsUnreadCount,
-                        onOpenSms = { navigateToTab(TopLevelDestination.SETTINGS) },
-                        onTogglePause = shellViewModel::togglePause,
-                        onForceRefresh = shellViewModel::forceRefresh,
-                        onSelectPollInterval = shellViewModel::setPollInterval,
-                        onOpenReboot = shellViewModel::openRebootConfirm,
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(horizontal = spacing.lg, vertical = spacing.xs)
-                    )
+                    if (!isAlignmentFullScreen) {
+                        HeaderBar(
+                            connectionStatus = shellState.connectionStatus,
+                            isPaused = shellState.isPaused,
+                            pollInterval = shellState.pollIntervalSeconds,
+                            routerHost = shellState.routerHost,
+                            smsUnreadCount = shellState.smsUnreadCount,
+                            onOpenSms = { navigateToTab(TopLevelDestination.SETTINGS) },
+                            onTogglePause = shellViewModel::togglePause,
+                            onForceRefresh = shellViewModel::forceRefresh,
+                            onSelectPollInterval = shellViewModel::setPollInterval,
+                            onOpenReboot = shellViewModel::openRebootConfirm,
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .padding(horizontal = spacing.lg, vertical = spacing.xs)
+                        )
 
-                    ConnectionStatusBanner(
-                        visible = shellState.isAuthError || shellState.connectionStatus == ConnectionStatus.DISCONNECTED,
-                        isAuthError = shellState.isAuthError,
-                        routerHost = shellState.routerHost,
-                        onRetry = shellViewModel::forceRefresh,
-                        onOpenSettings = { navigateToTab(TopLevelDestination.SETTINGS) },
-                        modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs)
-                    )
+                        ConnectionStatusBanner(
+                            visible = shellState.isAuthError || shellState.connectionStatus == ConnectionStatus.DISCONNECTED,
+                            isAuthError = shellState.isAuthError,
+                            routerHost = shellState.routerHost,
+                            onRetry = shellViewModel::forceRefresh,
+                            onOpenSettings = { navigateToTab(TopLevelDestination.SETTINGS) },
+                            modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.xs)
+                        )
+                    }
 
                     val listContentPadding = PaddingValues(
                         start = spacing.lg,
@@ -169,28 +182,53 @@ fun AppShell(
                         bottom = if (useFloatingBottomBar) GlassNavBarHeight + 28.dp else spacing.xl
                     )
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = HomeRoute,
+                    SharedTransitionLayout(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                     ) {
-                        composable<HomeRoute> {
-                            val homeVm: HomeViewModel = viewModel(factory = HomeViewModel.factory(container))
-                            HomeScreen(viewModel = homeVm, contentPadding = listContentPadding)
-                        }
-                        composable<SignalRoute> {
-                            val signalVm: SignalViewModel = viewModel(factory = SignalViewModel.factory(container))
-                            SignalScreen(viewModel = signalVm, contentPadding = listContentPadding)
-                        }
-                        composable<DevicesRoute> {
-                            val devicesVm: DevicesViewModel = viewModel(factory = DevicesViewModel.factory(container))
-                            DevicesScreen(viewModel = devicesVm, contentPadding = listContentPadding)
-                        }
-                        composable<SettingsRoute> {
-                            val settingsVm: SettingsHubViewModel = viewModel(factory = SettingsHubViewModel.factory(container))
-                            SettingsHubScreen(viewModel = settingsVm, contentPadding = listContentPadding)
+                        NavHost(
+                            navController = navController,
+                            startDestination = HomeRoute,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            composable<HomeRoute> {
+                                val homeVm: HomeViewModel = viewModel(factory = HomeViewModel.factory(container))
+                                HomeScreen(
+                                    viewModel = homeVm,
+                                    contentPadding = listContentPadding,
+                                    onOpenSignal = { navigateToTab(TopLevelDestination.SIGNAL) },
+                                    onOpenDevices = { navigateToTab(TopLevelDestination.DEVICES) },
+                                    onOpenSettings = { navigateToTab(TopLevelDestination.SETTINGS) },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this
+                                )
+                            }
+                            composable<SignalRoute> {
+                                val signalVm: SignalViewModel = viewModel(factory = SignalViewModel.factory(container))
+                                SignalScreen(
+                                    viewModel = signalVm,
+                                    contentPadding = listContentPadding,
+                                    onOpenAlignment = { navController.navigate(AlignmentRoute) },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this
+                                )
+                            }
+                            composable<AlignmentRoute> {
+                                val signalVm: SignalViewModel = viewModel(factory = SignalViewModel.factory(container))
+                                AlignmentScreen(
+                                    viewModel = signalVm,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable<DevicesRoute> {
+                                val devicesVm: DevicesViewModel = viewModel(factory = DevicesViewModel.factory(container))
+                                DevicesScreen(viewModel = devicesVm, contentPadding = listContentPadding)
+                            }
+                            composable<SettingsRoute> {
+                                val settingsVm: SettingsHubViewModel = viewModel(factory = SettingsHubViewModel.factory(container))
+                                SettingsHubScreen(viewModel = settingsVm, contentPadding = listContentPadding)
+                            }
                         }
                     }
                 }

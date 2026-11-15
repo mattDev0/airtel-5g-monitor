@@ -4,12 +4,18 @@ import com.airtel.monitor.core.network.AliasLookup
 import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.util.NetworkFormatters.roundTo2
+import com.airtel.monitor.data.dto.formatDurationText
+import com.airtel.monitor.data.dto.parseAlignmentSnapshot
 import com.airtel.monitor.data.dto.parseCarriers
+import com.airtel.monitor.data.dto.parseCellIdentity
 import com.airtel.monitor.data.dto.parseCellularMetrics
 import com.airtel.monitor.data.dto.parseDevices
 import com.airtel.monitor.data.dto.parseHardwareMetrics
 import com.airtel.monitor.data.dto.parseLatestChartRow
+import com.airtel.monitor.data.dto.parseLinkDetails
+import com.airtel.monitor.data.dto.parseMonthlyUsage
 import com.airtel.monitor.data.dto.parseNetworkMode218
+import com.airtel.monitor.data.dto.parseSignalHistory1018
 import com.airtel.monitor.data.dto.parseSmsUnreadCount
 import com.airtel.monitor.data.dto.parseWanBytes
 import com.airtel.monitor.data.model.BandwidthPoint
@@ -17,6 +23,8 @@ import com.airtel.monitor.data.model.CellLockInfo
 import com.airtel.monitor.data.model.ConnectionStatus
 import com.airtel.monitor.data.model.RouterState
 import com.airtel.monitor.data.model.WanMetrics
+import com.airtel.monitor.domain.AlignmentSnapshot
+import com.airtel.monitor.domain.SignalHistoryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +57,12 @@ class StatusRepository(
     private val _history1018 = MutableStateFlow<List<JSONObject>>(emptyList())
     val history1018: StateFlow<List<JSONObject>> = _history1018.asStateFlow()
 
+    private val _signalHistory = MutableStateFlow<List<SignalHistoryPoint>>(emptyList())
+    val signalHistory: StateFlow<List<SignalHistoryPoint>> = _signalHistory.asStateFlow()
+
+    private val _alignmentSnapshot = MutableStateFlow<AlignmentSnapshot?>(null)
+    val alignmentSnapshot: StateFlow<AlignmentSnapshot?> = _alignmentSnapshot.asStateFlow()
+
     private var prevWanRxBytes: Long? = null
     private var prevWanTxBytes: Long? = null
     private var prevWanTimeMs: Long = 0
@@ -56,12 +70,19 @@ class StatusRepository(
     private val history = Collections.synchronizedList(mutableListOf<BandwidthPoint>())
     private val maxHistory = 60
 
+    private val liveSignalPoints = Collections.synchronizedList(mutableListOf<SignalHistoryPoint>())
+    private var baselineHistory1018: List<SignalHistoryPoint> = emptyList()
+    private var lastSignalSampleMs: Long = 0L
+
     private var lastSlowPollTimeMs: Long = 0
     private val slowIntervalMs = 20_000L
     private var cachedLatestChart: JSONObject = JSONObject()
     private var cachedCell160: JSONObject = JSONObject()
     private var cachedBand161: JSONObject = JSONObject()
     private var cachedNetMode218: JSONObject = JSONObject()
+    private var cachedRouterInfo133: JSONObject = JSONObject()
+    private var cachedDeviceInfo207: JSONObject = JSONObject()
+    private var cachedTraffic337: JSONObject = JSONObject()
 
     var peakDlMbps: Double = 0.0
         private set
@@ -78,7 +99,15 @@ class StatusRepository(
         cachedCell160 = JSONObject()
         cachedBand161 = JSONObject()
         cachedNetMode218 = JSONObject()
+        cachedRouterInfo133 = JSONObject()
+        cachedDeviceInfo207 = JSONObject()
+        cachedTraffic337 = JSONObject()
         history.clear()
+        liveSignalPoints.clear()
+        baselineHistory1018 = emptyList()
+        lastSignalSampleMs = 0L
+        _signalHistory.value = emptyList()
+        _alignmentSnapshot.value = null
         peakDlMbps = 0.0
         peakUlMbps = 0.0
         _connectionStatus.value = ConnectionStatus.CONNECTING
@@ -148,7 +177,8 @@ class StatusRepository(
         if (ulMbps > peakUlMbps) peakUlMbps = ulMbps
 
         val devices = parseDevices(dhcp, dash, wifi5g, wifi24g, aliasLookup)
-        val cellular = parseCellularMetrics(sysStatus, dash, net205, latestChart)
+        val routerInfo133 = cachedRouterInfo133
+        val cellular = parseCellularMetrics(sysStatus, dash, net205, latestChart, routerInfo133)
 
         val carriersFrom205 = parseCarriers(net205)
         val carriersFrom160 = parseCarriers(cachedCell160)
@@ -188,7 +218,7 @@ class StatusRepository(
             flightModeOn = mode218.flightModeOn
         )
 
-        val hardware = parseHardwareMetrics(latestChart)
+        val hardware = parseHardwareMetrics(latestChart, cachedDeviceInfo207)
 
         val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nowMs))
         history.add(
@@ -204,6 +234,30 @@ class StatusRepository(
             history.removeAt(0)
         }
 
+        if (net205.length() > 0) {
+            val align = parseAlignmentSnapshot(net205, carriers, nowMs)
+            _alignmentSnapshot.value = align
+            if (lastSignalSampleMs == 0L || (nowMs - lastSignalSampleMs) >= 10_000L) {
+                if (align.rsrp4g != null || align.sinr4g != null || align.rsrp5g != null || align.sinr5g != null) {
+                    lastSignalSampleMs = nowMs
+                    liveSignalPoints.add(
+                        SignalHistoryPoint(
+                            timeLabel = timeFmt,
+                            rsrp4g = align.rsrp4g,
+                            sinr4g = align.sinr4g,
+                            rsrp5g = align.rsrp5g,
+                            sinr5g = align.sinr5g,
+                            pci = cellLock.servingPci4g
+                        )
+                    )
+                    while (liveSignalPoints.size > 60) {
+                        liveSignalPoints.removeAt(0)
+                    }
+                    _signalHistory.value = (baselineHistory1018 + liveSignalPoints.toList()).takeLast(90)
+                }
+            }
+        }
+
         val wan = WanMetrics(
             downloadKbps = rxKbps,
             uploadKbps = txKbps,
@@ -216,6 +270,19 @@ class StatusRepository(
             peakUlMbps = peakUlMbps
         )
 
+        val wanIp = routerInfo133.optString("wan_ip", "").trim()
+            .ifEmpty { "-" }
+        val wanIpv6 = routerInfo133.optString("wan_ipv6_ip", "").trim()
+            .ifEmpty { "-" }
+        val onlineDuration = formatDurationText(
+            net205.optString("onlineDuration").ifEmpty { net205.optString("onlineTime") }
+        )
+        val uptimeText = formatDurationText(
+            cachedDeviceInfo207.optString("uptime").ifEmpty {
+                routerInfo133.optString("uptime").ifEmpty { sysStatus.optString("uptime") }
+            }
+        )
+
         val state = RouterState(
             timestamp = nowMs,
             timeFormatted = timeFmt,
@@ -225,7 +292,15 @@ class StatusRepository(
             cellLock = cellLock,
             hardware = hardware,
             devices = devices,
-            history = history.toList()
+            history = history.toList(),
+            wanIp = wanIp,
+            wanIpv6 = wanIpv6,
+            onlineDurationText = onlineDuration,
+            uptimeText = uptimeText,
+            linkDetails = parseLinkDetails(net205, routerInfo133),
+            cellIdentity = parseCellIdentity(net205, routerInfo133),
+            monthlyUsage = parseMonthlyUsage(net205, dash, cachedTraffic337),
+            networkModeInfo = mode218
         )
         _routerState.value = state
         _connectionStatus.value = ConnectionStatus.CONNECTED
@@ -235,9 +310,13 @@ class StatusRepository(
 
     /** Alignment mode polls ONLY cmd 205 at 1s interval. */
     fun pollAlignment(): RouterResult<JSONObject> {
+        val nowMs = clock()
         val res = session.execute(205)
         if (res is RouterResult.Ok) {
-            _lastNet205.value = res.data
+            val json = res.data
+            _lastNet205.value = json
+            val carriers = parseCarriers(json)
+            _alignmentSnapshot.value = parseAlignmentSnapshot(json, carriers, nowMs)
             _connectionStatus.value = ConnectionStatus.CONNECTED
             _lastError.value = null
         } else if (res is RouterResult.NotLoggedIn) {
@@ -290,6 +369,26 @@ class StatusRepository(
                     arr.optJSONObject(i)?.let { list.add(it) }
                 }
                 _history1018.value = list
+                baselineHistory1018 = parseSignalHistory1018(list, limit = 60)
+                _signalHistory.value = (baselineHistory1018 + liveSignalPoints.toList()).takeLast(90)
+            }
+        }
+
+        session.execute(133).getOrNull()?.let { info ->
+            if (info.length() > 1 && info.optBoolean("success", true)) {
+                cachedRouterInfo133 = info
+            }
+        }
+
+        session.execute(207).getOrNull()?.let { dev ->
+            if (dev.length() > 1 && dev.optBoolean("success", true)) {
+                cachedDeviceInfo207 = dev
+            }
+        }
+
+        session.execute(337).getOrNull()?.let { traffic ->
+            if (traffic.length() > 1 && traffic.optBoolean("success", true)) {
+                cachedTraffic337 = traffic
             }
         }
 

@@ -7,11 +7,13 @@ import com.airtel.monitor.core.network.WriteSpec
 import com.airtel.monitor.core.util.BandMask
 import com.airtel.monitor.data.dto.parseBandLock
 import com.airtel.monitor.data.dto.parseCellLock
+import com.airtel.monitor.data.dto.parseNeighborCells
 import com.airtel.monitor.data.model.BandLockConfig
 import com.airtel.monitor.data.model.CellLockConfig
 import com.airtel.monitor.data.model.LockSettings
 import com.airtel.monitor.data.model.LteLockCell
 import com.airtel.monitor.data.model.NrLockCell
+import com.airtel.monitor.domain.NeighborCell
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,23 @@ class SignalRepository(
 ) {
     private val _lockSettings = MutableStateFlow<LockSettings?>(null)
     val lockSettings: StateFlow<LockSettings?> = _lockSettings.asStateFlow()
+
+    private val _neighborCells = MutableStateFlow<List<NeighborCell>>(emptyList())
+    val neighborCells: StateFlow<List<NeighborCell>> = _neighborCells.asStateFlow()
+
+    fun loadNeighborCells(): RouterResult<List<NeighborCell>> {
+        return when (val res = session.execute(282)) {
+            is RouterResult.Ok -> {
+                val parsed = parseNeighborCells(res.data)
+                _neighborCells.value = parsed
+                RouterResult.Ok(parsed)
+            }
+            is RouterResult.NotLoggedIn -> res
+            is RouterResult.LimitedAccess -> res
+            is RouterResult.Unreachable -> res
+            is RouterResult.BadResponse -> res
+        }
+    }
 
     fun loadLockSettings(): RouterResult<LockSettings> {
         val bandRes = session.execute(161)

@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "cmd": 207,
+  "uptime": "172800",
+  "cpu_usage": "12.5",
+  "device_temperature": "52",
+  "memory": "44",
+  "board_type": "ZLT X17M",
+  "idu_dev_type": "ZLT W304VA PRO",
+  "hwversion": "V1.0",
+  "real_fwversion": "V1.2.3",
+  "build_date": "2025-11-12",
+  "IMSI": "REDACTED",
+  "ICCID": "REDACTED",
+  "module_imei": "REDACTED",
+  "device_sn": "REDACTED",
+  "idu_device_mac": "00:00:00:00:00:00",
+  "lan_mac": "00:00:00:00:00:00"
+}

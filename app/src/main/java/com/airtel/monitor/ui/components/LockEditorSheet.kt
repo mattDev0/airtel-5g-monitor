@@ -36,9 +36,9 @@ import com.airtel.monitor.data.model.LockSettings
 import com.airtel.monitor.data.model.LockState
 import com.airtel.monitor.data.model.LteLockCell
 import com.airtel.monitor.data.model.NrLockCell
-import com.airtel.monitor.ui.theme.StatusError
-import com.airtel.monitor.ui.theme.StatusSuccess
-import com.airtel.monitor.ui.theme.StatusWarning
+import com.airtel.monitor.domain.CarrierComponent
+import com.airtel.monitor.ui.designsystem.CarrierRow
+import com.airtel.monitor.ui.theme.AirtelTheme
 
 private enum class LockTab { BANDS, CELLS }
 
@@ -54,12 +54,17 @@ fun LockEditorSheet(
     onReload: () -> Unit,
     onSaveBands: (lock4g: Boolean, bands4g: Set<Int>, lock5g: Boolean, bands5g: Set<Int>) -> Unit,
     onSaveLte: (enabled: Boolean, cells: List<LteLockCell>) -> Unit,
-    onSaveNr: (enabled: Boolean, cells: List<NrLockCell>) -> Unit
+    onSaveNr: (enabled: Boolean, cells: List<NrLockCell>) -> Unit,
+    carriers: List<CarrierComponent> = emptyList()
 ) {
     var tab by remember { mutableStateOf(LockTab.CELLS) }
+    val semantic = AirtelTheme.colors
+    val spacing = AirtelTheme.spacing
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = AirtelTheme.shapes.sheet,
         sheetState = rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
@@ -69,9 +74,9 @@ fun LockEditorSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = spacing.lg)
+                .padding(bottom = spacing.xxl),
+            verticalArrangement = Arrangement.spacedBy(spacing.md)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CellTower, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -79,6 +84,19 @@ fun LockEditorSheet(
                 Text("Network Locks", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 if (isLoading || isSaving) LoadingIndicator(modifier = Modifier.size(28.dp))
+            }
+
+            if (carriers.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
+                    Text(
+                        text = "Serving carriers",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    carriers.forEach { carrier ->
+                        CarrierRow(carrier = carrier)
+                    }
+                }
             }
 
             Row(
@@ -102,8 +120,8 @@ fun LockEditorSheet(
             message?.let {
                 val failed = !it.contains("confirmed")
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = (if (failed) StatusWarning else StatusSuccess).copy(alpha = 0.15f)
+                    shape = AirtelTheme.shapes.tile,
+                    color = (if (failed) semantic.warning else semantic.success).copy(alpha = 0.15f)
                 ) {
                     Text(
                         it,
@@ -323,9 +341,10 @@ private fun CellSection(
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        val semantic = AirtelTheme.colors
                         val (text, color) = when (state) {
-                            LockState.LOCKED -> "Locked" to StatusSuccess
-                            LockState.FAILED -> "Lock failed" to StatusError
+                            LockState.LOCKED -> "Locked" to semantic.success
+                            LockState.FAILED -> "Lock failed" to semantic.error
                             LockState.UNLOCKED -> "Auto" to MaterialTheme.colorScheme.onSurfaceVariant
                         }
                         Surface(shape = RoundedCornerShape(50), color = color.copy(alpha = 0.15f)) {

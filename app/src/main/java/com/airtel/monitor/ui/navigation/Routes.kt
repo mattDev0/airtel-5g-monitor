@@ -14,6 +14,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SignalRoute
 @Serializable data object DevicesRoute
 @Serializable data object SettingsRoute
+@Serializable data object AlignmentRoute
 
 enum class TopLevelDestination(
     val route: Any,

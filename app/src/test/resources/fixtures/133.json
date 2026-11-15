@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "cmd": 133,
+  "network_type_str": "4G+",
+  "wan_ip": "10.8.42.19",
+  "wan_ipv6_ip": "",
+  "uptime": "86410",
+  "CELL_ID": "2676737",
+  "PCI": "393+393",
+  "FREQ": "3400+225",
+  "RSRP": "-84",
+  "RSRQ": "-9",
+  "RSSI": "-57",
+  "SINR": "16",
+  "CQI": "12",
+  "dl_mcs": "22",
+  "ul_mcs": "18",
+  "IMSI": "REDACTED",
+  "ICCID": "REDACTED",
+  "module_imei": "REDACTED",
+  "device_sn": "REDACTED"
+}

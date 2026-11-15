@@ -47,3 +47,42 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 ### Open Questions / Deferred
 - Confirm `ThemePreference` dynamic color opt-in exposure once App Settings lands in Phase 6 (`dynamicColor` currently defaults to `false` to preserve Airtel red/coral branding).
 - Capture exact web UI payloads from the live router for neighbor cells (`cmd 282`, Phase 1), MAC filter (`html/firewall/macIndex.html`, `cmd 23`, Phase 2), and Wi-Fi advanced/SMS/security/system schemas ahead of Phases 1–5.
+
+---
+
+## Phase 1 — Home + Signal
+
+**Status:** Partially complete (read telemetry, charts, neighbor cells, Antenna Alignment Mode, and existing locks verified by unit tests, lint, and debug APK build; `cmd 218` network-mode/CA SET switching deferred pending router web UI HTML/JS schema capture)
+
+### Implemented
+- **Domain Models & Phase 1 Parsers:**
+  - Added `LinkDetails`, `CellIdentity`, `NeighborCell`, `SignalHistoryPoint`, and `AlignmentSnapshot` in `app/src/main/java/com/airtel/monitor/domain/SignalModels.kt` plus `MonthlyUsageSummary` in `app/src/main/java/com/airtel/monitor/domain/UsageModels.kt`.
+  - Extended `CellularMetrics` (5G/4G RSRQ, RSSI, `has5gMetrics`) and `RouterState` (`wanIp`, `wanIpv6`, `onlineDurationText`, `uptimeText`, `linkDetails`, `cellIdentity`, `monthlyUsage`, `networkModeInfo`) in `data/model/RouterModels.kt`.
+  - Extended `RouterDtoParsers.kt` (`deviceInfo207` hardware/uptime fallbacks and `routerInfo133` cellular RSRQ/RSSI/network fallbacks) and added `Phase1Parsers.kt` (`parseLinkDetails`, `parseCellIdentity`, `parseNeighborCells` handling JSON arrays and comma-separated tuples, `parseSignalHistory1018`, `parseAlignmentSnapshot`, `parseMonthlyUsage`, `calculateDaysLeftInCycle`, `formatDurationText`, `formatDataSizeMb`).
+- **Repositories & Polling:**
+  - Updated `StatusRepository.kt` to poll `cmd 133`, `207`, and `337` on the 20s slow refresh cadence, combine `cmd 1018` history with 10s-sampled live `cmd 205` points, expose `signalHistory` and `alignmentSnapshot`, and run `pollAlignment()` (`cmd 205` only).
+  - Updated `SignalRepository.kt` to expose `neighborCells` and `loadNeighborCells()` (`cmd 282`), plus `rescanNetwork()` (`cmd 288`).
+- **Home Tab (`HomeViewModel.kt`, `HomeScreen.kt`):**
+  - Hero status card with network-type badge, aggregated CA summary pill wired to `SharedTransitionLayout`, inline signal bars, compact primary RSRP/SINR readouts, WAN IP, and uptime/online chips.
+  - 60-second DL/UL throughput `LineChart` sparkline + current rates and session totals.
+  - Monthly data usage card (`cmd 401` + `cmd 337`) with progress indicator, billing-cycle days left, and data-warning badge.
+  - Quick toggles for Mobile Data (`cmd 4`), Wi-Fi 2.4 GHz (`cmd 224` / `202`), Wi-Fi 5 GHz (`cmd 225` / `202`), and Flight Mode (`cmd 132`) with Tier-2 `ConfirmSheet` confirmation before changing radio state, plus quick navigation tiles to Signal, Devices, Messages, and Alignment Mode.
+- **Signal Tab & Alignment Mode (`SignalViewModel.kt`, `SignalScreen.kt`, `AlignmentScreen.kt`, `AlignmentTonePlayer.kt`, `LockEditorSheet.kt`, `AppShell.kt`, `Routes.kt`):**
+  - Restyled `LockEditorSheet.kt` onto `AirtelTheme.colors` semantic tokens and added a serving-carriers strip (`CarrierRow`) inside the sheet.
+  - Signal tab displays the shared-element CA pill, serving-carrier `CarrierRow` breakdown, conditional 5G/4G `SignalMeter` bars, Link Details card, Copyable Cell Identity card (long-press clipboard copy via `LocalResources`), ~10-minute RSRP and SINR `LineChart` graphs, Neighbor Cells (`cmd 282`) with load button and format handling, read-only `cmd 218` Network Mode / CA status display, Cell/Band lock summary + editor, and Tier-2 confirmed Re-search Network (`cmd 288`).
+  - Added `AlignmentRoute` and full-screen `AlignmentScreen` with 1s `PollingMode.ALIGNMENT` (`cmd 205`), `view.keepScreenOn`, best RSRP/SINR tracking + delta chips + reset, 30s trend `LineChart`, haptic feedback ticks, and `AlignmentTonePlayer` (pitch-scaled `AudioTrack` PCM pip) with sound mute toggle.
+- **Tests & Fixtures:**
+  - Added redacted test fixtures `133.json`, `207.json`, `282.json`, and `337.json` under `app/src/test/resources/fixtures/`.
+  - Added `Phase1ParsersTest.kt` (6 tests) and `StatusRepositoryPhase1Test.kt` (1 test).
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`59` unit tests across 9 test suites: 0 skipped, 0 failures, 0 errors; `lintDebug` passed with 0 errors and 8 SARIF entries; `assembleDebug` produced the debug APK).
+
+### Untested on Device / Live Router
+- Runtime UI behavior on Android device/emulator: `SharedTransitionLayout` motion between Home and Signal carrier pill, `AlignmentTonePlayer` audio playback on hardware speakers, `view.keepScreenOn`, and haptic feedback triggers.
+- Live ZLT X17M validation of `cmd 282` (`neighbor_info`), `cmd 337` (`limitFlow`), `cmd 133` (`tx_mcs` / `rx_mcs` / `dl_qam` / `ul_qam`), and `cmd 207` (`uptime`) against the real router firmware.
+- Home "Messages" quick tile currently routes to the Settings tab placeholder until Phase 4 adds the Messages screen.
+
+### Blocked / Deferred
+- **No LAN route to `http://192.168.1.1` from this build environment:** `curl -sS --max-time 5 http://192.168.1.1/index.html` timed out (`Connection timed out after 5002 milliseconds`).
+- Because write schemas must be confirmed from the router web UI HTML/JS and recorded under `Write schemas` in `docs/ROUTER_API.md` before writing Kotlin, `cmd 218` network-mode / `mode5g` / `lteCA` / `nrCA` SET switching is deferred and rendered read-only in Phase 1. Phases 2–5 SET features (`cmd 23`, `115`, `208`, `367`, `275`, `202` WEP/hide, `214`, `134`, `213`, `503`, `132` PIN, `350`, `13`, `14`, `16`, `102`, `112`) are similarly blocked pending router web UI HTML/JS captures.

@@ -12,6 +12,7 @@ import com.airtel.monitor.data.model.LockSettings
 import com.airtel.monitor.data.model.LteLockCell
 import com.airtel.monitor.data.model.NrLockCell
 import com.airtel.monitor.data.model.RouterState
+import com.airtel.monitor.data.model.WifiRadioConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +24,8 @@ import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val routerState: RouterState? = null,
+    val wifiRadios: WifiRadioConfig? = null,
+    val smsUnreadCount: Int = 0,
     val networkActionBusy: Boolean = false,
     val showLockEditor: Boolean = false,
     val lockSettings: LockSettings? = null,
@@ -36,14 +39,19 @@ class HomeViewModel(
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalHomeState())
+    private var initialWifiLoaded = false
 
     val uiState: StateFlow<HomeUiState> = combine(
         container.statusRepository.routerState,
         container.signalRepository.lockSettings,
+        container.wifiRepository.config,
+        container.statusRepository.smsUnreadCount,
         local
-    ) { routerState, lockSettings, loc ->
+    ) { routerState, lockSettings, wifiConfig, smsUnread, loc ->
         HomeUiState(
             routerState = routerState,
+            wifiRadios = wifiConfig,
+            smsUnreadCount = smsUnread,
             networkActionBusy = loc.networkActionBusy,
             showLockEditor = loc.showLockEditor,
             lockSettings = lockSettings,
@@ -53,11 +61,42 @@ class HomeViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
+    fun ensureWifiRadiosLoaded() {
+        if (initialWifiLoaded) return
+        initialWifiLoaded = true
+        viewModelScope.launch(Dispatchers.IO) {
+            container.wifiRepository.loadWifiRadios()
+        }
+    }
+
     fun setMobileData(on: Boolean) = runNetworkAction { container.mobileRepository.setMobileData(on) }
 
     fun setFlightMode(on: Boolean) = runNetworkAction { container.mobileRepository.setFlightMode(on) }
 
+    fun setWifi24g(on: Boolean) = runWifiToggle { container.wifiRepository.setWifi24g(on) }
+
+    fun setWifi5g(on: Boolean) = runWifiToggle { container.wifiRepository.setWifi5g(on) }
+
     fun rescanNetwork() = runNetworkAction { container.mobileRepository.rescanNetwork() }
+
+    fun emitFeedback(message: String) {
+        container.emitStatusMessage(message)
+    }
+
+    private fun runWifiToggle(action: suspend () -> RouterResult<String>) {
+        if (local.value.networkActionBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            local.update { it.copy(networkActionBusy = true) }
+            val result = action()
+            container.wifiRepository.loadWifiRadios()
+            local.update { it.copy(networkActionBusy = false) }
+            val msg = when (result) {
+                is RouterResult.Ok -> result.data
+                else -> result.errorMessage().ifEmpty { "Router rejected the Wi-Fi change" }
+            }
+            container.emitStatusMessage(msg)
+        }
+    }
 
     private fun runNetworkAction(action: suspend () -> RouterResult<String>) {
         if (local.value.networkActionBusy) return

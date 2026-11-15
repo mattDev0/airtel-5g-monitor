@@ -1,6 +1,10 @@
 package com.airtel.monitor.data.model
 
+import com.airtel.monitor.data.dto.NetworkModeSnapshot
 import com.airtel.monitor.domain.CarrierComponent
+import com.airtel.monitor.domain.CellIdentity
+import com.airtel.monitor.domain.LinkDetails
+import com.airtel.monitor.domain.MonthlyUsageSummary
 
 enum class DeviceType {
     PHONE,
@@ -57,8 +61,15 @@ data class CellularMetrics(
     val iduType: String = "-",
     val nrCqi: String = "-",
     val lteCqi: String = "-",
-    val nrQamDl: String = "-"
-)
+    val nrQamDl: String = "-",
+    val rsrq5g: String = "-",
+    val rssi5g: String = "-",
+    val rsrq4g: String = "-",
+    val rssi4g: String = "-"
+) {
+    val has5gMetrics: Boolean
+        get() = listOf(rsrp5g, rsrq5g, sinr5g, rssi5g, nrCqi).any { it.isNotBlank() && it != "-" }
+}
 
 data class CellLockInfo(
     val servingPci4g: String = "-",
@@ -150,7 +161,15 @@ data class RouterState(
     val cellLock: CellLockInfo = CellLockInfo(),
     val hardware: HardwareMetrics = HardwareMetrics(),
     val devices: List<DeviceItem> = emptyList(),
-    val history: List<BandwidthPoint> = emptyList()
+    val history: List<BandwidthPoint> = emptyList(),
+    val wanIp: String = "-",
+    val wanIpv6: String = "-",
+    val onlineDurationText: String = "-",
+    val uptimeText: String = "-",
+    val linkDetails: LinkDetails = LinkDetails(),
+    val cellIdentity: CellIdentity = CellIdentity(),
+    val monthlyUsage: MonthlyUsageSummary = MonthlyUsageSummary(),
+    val networkModeInfo: NetworkModeSnapshot = NetworkModeSnapshot(null, null)
 )
 
 /** cmd 161: which LTE/NR bands the modem may use. Band numbers, e.g. 3 = B3, 78 = n78. */

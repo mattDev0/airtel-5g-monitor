@@ -46,11 +46,26 @@ fun parseLatestChartRow(statusChart1018: JSONObject): JSONObject {
     return devInfo.optJSONObject(devInfo.length() - 1) ?: JSONObject()
 }
 
-fun parseHardwareMetrics(latestChart: JSONObject): HardwareMetrics = HardwareMetrics(
-    cpuUsage = latestChart.optDouble("cpu_usage", 0.0),
-    temperature = latestChart.optString("temperature", "--").ifEmpty { "--" },
-    memory = latestChart.optString("memory", "--").ifEmpty { "--" }
-)
+fun parseHardwareMetrics(
+    latestChart: JSONObject,
+    deviceInfo207: JSONObject = JSONObject()
+): HardwareMetrics {
+    val cpuFromChart = latestChart.optDouble("cpu_usage", Double.NaN)
+    val cpuFrom207 = deviceInfo207.optString("cpu_usage", "").toDoubleOrNull()
+        ?: deviceInfo207.optDouble("cpu_usage", Double.NaN)
+    val cpu = when {
+        !cpuFromChart.isNaN() -> cpuFromChart
+        !cpuFrom207.isNaN() -> cpuFrom207
+        else -> 0.0
+    }
+    val temp = latestChart.optString("temperature", "").trim()
+        .ifEmpty { deviceInfo207.optString("device_temperature", "").trim() }
+        .ifEmpty { "--" }
+    val mem = latestChart.optString("memory", "").trim()
+        .ifEmpty { deviceInfo207.optString("memory", "").trim() }
+        .ifEmpty { "--" }
+    return HardwareMetrics(cpuUsage = cpu, temperature = temp, memory = mem)
+}
 
 fun parseNetworkMode218(json: JSONObject): NetworkModeSnapshot = NetworkModeSnapshot(
     mobileDataOn = json.optString("dialMode").takeIf { it.isNotEmpty() }?.let { it == "1" },
@@ -119,7 +134,8 @@ fun parseCellularMetrics(
     sysStatus: JSONObject,
     dash: JSONObject,
     net205: JSONObject = JSONObject(),
-    latestChart: JSONObject = JSONObject()
+    latestChart: JSONObject = JSONObject(),
+    routerInfo133: JSONObject = JSONObject()
 ): CellularMetrics {
     fun pick(vararg values: String): String =
         values.map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.equals("null", ignoreCase = true) && it != "-" } ?: "-"
@@ -127,21 +143,26 @@ fun parseCellularMetrics(
     val netType = pick(
         sysStatus.optString("network_type_str"),
         net205.optString("network_type_str"),
-        dash.optString("network_type_str")
+        dash.optString("network_type_str"),
+        routerInfo133.optString("network_type_str")
     )
     return CellularMetrics(
         networkType = netType,
         signalLvl = sysStatus.optInt("signal_lvl", dash.optInt("signal_lvl", net205.optInt("signal_lvl", 0))),
-        rsrp5g = pick(net205.optString("RSRP_5G"), latestChart.optString("rsrp_5g"), dash.optString("RSRP_5G")),
-        sinr5g = pick(net205.optString("SINR_5G"), latestChart.optString("sinr_5g")),
-        rsrp4g = pick(net205.optString("RSRP"), latestChart.optString("rsrp_4g"), dash.optString("RSRP")),
-        sinr4g = pick(net205.optString("SINR"), latestChart.optString("sinr_4g")),
+        rsrp5g = pick(net205.optString("RSRP_5G"), routerInfo133.optString("RSRP_5G"), latestChart.optString("rsrp_5g"), dash.optString("RSRP_5G")),
+        sinr5g = pick(net205.optString("SINR_5G"), routerInfo133.optString("SINR_5G"), latestChart.optString("sinr_5g")),
+        rsrp4g = pick(net205.optString("RSRP"), routerInfo133.optString("RSRP"), latestChart.optString("rsrp_4g"), dash.optString("RSRP")),
+        sinr4g = pick(net205.optString("SINR"), routerInfo133.optString("SINR"), latestChart.optString("sinr_4g")),
         operator = pick(net205.optString("network_operator"), dash.optString("network_operator"), "Airtel"),
         boardType = sysStatus.optString("board_type", "").ifEmpty { "ZLT X17M" },
         iduType = sysStatus.optString("idu_dev_type", "").ifEmpty { "ZLT W304VA PRO" },
         nrCqi = pick(net205.optString("CQI_5G"), latestChart.optString("nr_cqi")),
-        lteCqi = pick(net205.optString("CQI"), latestChart.optString("lte_cqi")),
-        nrQamDl = pick(net205.optString("max_dl_qam_5g"), latestChart.optString("nr_qam_dl"))
+        lteCqi = pick(net205.optString("CQI"), routerInfo133.optString("CQI"), latestChart.optString("lte_cqi")),
+        nrQamDl = pick(net205.optString("max_dl_qam_5g"), latestChart.optString("nr_qam_dl")),
+        rsrq5g = pick(net205.optString("RSRQ_5G"), routerInfo133.optString("RSRQ_5G")),
+        rssi5g = pick(net205.optString("RSSI_5G"), routerInfo133.optString("RSSI_5G")),
+        rsrq4g = pick(net205.optString("RSRQ"), routerInfo133.optString("RSRQ")),
+        rssi4g = pick(net205.optString("RSSI"), routerInfo133.optString("RSSI"))
     )
 }
 
