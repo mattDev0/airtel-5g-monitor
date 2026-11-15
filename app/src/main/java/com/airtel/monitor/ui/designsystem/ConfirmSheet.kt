@@ -132,7 +132,7 @@ fun ConfirmSheet(
                 OutlinedTextField(
                     value = typedInput,
                     onValueChange = { typedInput = it },
-                    placeholder = { Text(expectedText) },
+                    placeholder = { Text(stringResource(R.string.confirm_type_placeholder, expectedText)) },
                     singleLine = true,
                     shape = AirtelTheme.shapes.input,
                     modifier = Modifier.fillMaxWidth()

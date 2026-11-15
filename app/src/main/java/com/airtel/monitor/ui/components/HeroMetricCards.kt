@@ -78,8 +78,11 @@ fun MinimalWanSpeedCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
+                val formattedTotal = wan.totalFlowMb.trim().toDoubleOrNull()?.let {
+                    com.airtel.monitor.data.dto.formatDataSizeMb(it)
+                } ?: wan.totalFlowMb
                 Text(
-                    text = stringResource(R.string.home_speed_total_fmt, wan.totalFlowMb),
+                    text = stringResource(R.string.home_speed_total_fmt, formattedTotal),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace

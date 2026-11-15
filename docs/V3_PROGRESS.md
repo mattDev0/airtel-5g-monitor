@@ -380,7 +380,7 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 
 ## Phase 8 — iOS Parity
 
-**Status:** Implemented v3 SwiftUI architecture & unit tests under `iosApp/` (`Swift 5.9`, `iOS 16.0` minimum deployment target, `Xcode 26` SDK + `#available(iOS 26.0, *)` Liquid Glass, `XcodeGen`); verification runs via `.github/workflows/ios-build.yml` on `macos-15`.
+**Status:** Complete & verified (`v3-rebuild`, GitHub Actions run `43761861978` on commit `8a75ceb`, `macos-15` / `Xcode 26.3`). All v3 SwiftUI architecture & unit tests compile cleanly under `Swift 5.9` (`iOS 16.0` minimum deployment target, `Xcode 26` SDK + `#available(iOS 26.0, *)` Liquid Glass, `XcodeGen`).
 
 ### Implemented
 - **Core, Auth, Keychain & Write Safety (`AppPreferencesStore.swift`, `KeychainPasswordStore.swift`, `RouterResult.swift`, `RouterSession.swift`, `SettingsWriter.swift`, `Validators.swift`, `OuiVendorLookup.swift`):**
@@ -399,5 +399,16 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
   - Preserved `MARKETING_VERSION: "2.6.0"`, `CURRENT_PROJECT_VERSION: 12`, and `Info.plist` keys (`UILaunchStoryboardName`, `NSLocalNetworkUsageDescription`, `NSAppTransportSecurity`); first-pass WidgetKit / BackgroundTasks intentionally out of scope per `REBUILD_PLAN.md §0`.
 - **Tests (`iosApp/AirtelMonitorTests/`):**
   - Updated `LockLogicTests.swift` and added `RouterSessionAndWriterTests.swift`, `ParsersAndValidatorsTests.swift`, and `RepositoriesTests.swift` covering SHA-256 auth, relogin, `LIMITED_ACCESS`, `SettingsWriter`, `BandMask`/cell validation, `RouterFeatureFlags`, parsers, validators, offline `MockRouterTransport` repositories, and `AlertEvaluator`.
+
+### Verification (`ios-build.yml` Run `43761861978`, Commit `8a75ceb`)
+- **Environment:** `macos-15`, `Xcode 26.3` (`Build version 17C529`), `xcodegen generate`.
+- **Unit Tests:** `Executed 19 tests, with 0 failures (0 unexpected)` on simulator `4A57FB15-6E7C-49CC-BE93-450B18BD286E` (`LockLogicTests` 4, `ParsersAndValidatorsTests` 5, `RepositoriesTests` 6, `RouterSessionAndWriterTests` 4).
+- **Device Build & Packaging:** `xcodebuild -sdk iphoneos -configuration Release` (`** BUILD SUCCEEDED **`), `Info.plist` checks (`UILaunchStoryboardName`, `NSLocalNetworkUsageDescription`, `NSAppTransportSecurity`, `Version: 2.6.0 (12)`), packaged `AirtelMonitor.ipa` (`3.0M`) and uploaded artifact `AirtelMonitor-iOS-IPA`.
+
+### Post-Phase 8 Android Polish
+- **`HeroMetricCards.kt` / `strings.xml`:** Formatted numeric `wan.totalFlowMb` via `formatDataSizeMb(...)` and removed the hardcoded `MB` suffix from `home_speed_total_fmt` (`Total: %1$s`).
+- **`ConfirmSheet.kt` / `strings.xml`:** Added `confirm_type_placeholder` (`Type %1$s here`) so typed confirmation fields display an instructional hint instead of repeating the raw confirmation token.
+- **`strings.xml`:** Removed router protocol details (`via cmd 337` from `usage_clear_router_confirm_impact` and `from cmd 218 (mode/CA switching awaits router web UI write schema)` from `signal_radio_mode_readonly_note`).
+- **Verification (`sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --console=plain`):** `BUILD SUCCESSFUL` (`103` unit tests, `0` failures, `0` errors, `0` skipped; debug lint & release R8 build clean).
 
 

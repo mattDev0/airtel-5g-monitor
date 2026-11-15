@@ -28,6 +28,7 @@
     <string name="action_retry">Retry</string>
     <string name="action_continue">Continue</string>
     <string name="confirm_type_prompt">Type \"%1$s\" to confirm</string>
+    <string name="confirm_type_placeholder">Type %1$s here</string>
     <string name="error_generic_title">Unable to reach router</string>
     <string name="offline_banner_title">Cannot reach router at %1$s</string>
     <string name="offline_banner_subtitle">Ensure your phone is connected to the router\'s Wi-Fi network.</string>
@@ -67,7 +68,7 @@
 
     <!-- Home screen (Phase 1) -->
     <string name="home_speed_title">Internet Speed</string>
-    <string name="home_speed_total_fmt">Total: %1$s MB</string>
+    <string name="home_speed_total_fmt">Total: %1$s</string>
     <string name="home_speed_download">Download</string>
     <string name="home_speed_upload">Upload</string>
     <string name="home_speed_kbps_fmt">%1$s kB/s</string>
@@ -130,7 +131,7 @@
     <string name="signal_neighbors_title">Neighbour Cells</string>
     <string name="signal_neighbors_refresh">Refresh neighbours</string>
     <string name="signal_radio_mode_title">Radio Mode &amp; Carrier Aggregation</string>
-    <string name="signal_radio_mode_readonly_note">Read-only from cmd 218 (mode/CA switching awaits router web UI write schema)</string>
+    <string name="signal_radio_mode_readonly_note">Manage preferred mode and carrier aggregation in Settings → Mobile Network &amp; SIM.</string>
     <string name="alignment_title">Antenna Alignment</string>
     <string name="alignment_subtitle">Live · updates every 2 s · Keep screen on</string>
     <string name="alignment_cadence_hint">The router refreshes signal about every 10 s. Move the antenna a little, then wait for the next reading.</string>
@@ -440,7 +441,7 @@
     <string name="usage_calibrate_confirm_impact">Writes the calibrated usage (%1$s) directly to the router\'s monthly cellular counter. This changes router quota tracking and cannot be undone.</string>
     <string name="usage_calibrate_confirm_token">CALIBRATE</string>
     <string name="usage_clear_router_confirm_title">Clear router monthly statistics?</string>
-    <string name="usage_clear_router_confirm_impact">Resets the router\'s own monthly statistical traffic counter to zero via cmd 337. Local daily snapshots stored in this app are not removed.</string>
+    <string name="usage_clear_router_confirm_impact">Resets the router\'s own monthly statistical traffic counter to zero. Local daily snapshots stored in this app are not removed.</string>
     <string name="usage_clear_confirm_token">CLEAR</string>
     <string name="usage_start_day_confirm_title">Change billing cycle start day?</string>
     <string name="usage_start_day_confirm_impact">Changing the reset day from day %1$d to day %2$d resets the router\'s monthly data counter.</string>
