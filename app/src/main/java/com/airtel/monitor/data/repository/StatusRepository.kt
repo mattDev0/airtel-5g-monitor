@@ -4,6 +4,7 @@ import com.airtel.monitor.core.network.AliasLookup
 import com.airtel.monitor.core.network.RouterResult
 import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.util.NetworkFormatters.roundTo2
+import com.airtel.monitor.data.local.DailyUsageStore
 import com.airtel.monitor.data.dto.formatDurationText
 import com.airtel.monitor.data.dto.parseAlignmentSnapshot
 import com.airtel.monitor.data.dto.parseCarriers
@@ -37,7 +38,8 @@ import java.util.Locale
 class StatusRepository(
     private val session: RouterSession,
     private val aliasLookup: AliasLookup,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val dailyUsageStore: DailyUsageStore? = null
 ) {
     private val _routerState = MutableStateFlow<RouterState?>(null)
     val routerState: StateFlow<RouterState?> = _routerState.asStateFlow()
@@ -292,6 +294,9 @@ class StatusRepository(
             }
         )
 
+        val monthlyUsage = parseMonthlyUsage(net205, dash, cachedTraffic337)
+        dailyUsageStore?.recordSample(nowMs, monthlyUsage)
+
         val state = RouterState(
             timestamp = nowMs,
             timeFormatted = timeFmt,
@@ -308,13 +313,17 @@ class StatusRepository(
             uptimeText = uptimeText,
             linkDetails = parseLinkDetails(net205, routerInfo133),
             cellIdentity = parseCellIdentity(net205, routerInfo133),
-            monthlyUsage = parseMonthlyUsage(net205, dash, cachedTraffic337),
+            monthlyUsage = monthlyUsage,
             networkModeInfo = mode218
         )
         _routerState.value = state
         _connectionStatus.value = ConnectionStatus.CONNECTED
         _lastError.value = null
         return RouterResult.Ok(state)
+    }
+
+    fun updateSmsUnreadCount(count: Int) {
+        _smsUnreadCount.value = count.coerceAtLeast(0)
     }
 
     /** Alignment mode polls ONLY cmd 205 at 2s interval. */

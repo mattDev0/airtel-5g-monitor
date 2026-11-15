@@ -78,6 +78,8 @@ fun HomeScreen(
     onOpenDevices: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenMessages: () -> Unit = onOpenSettings,
+    onOpenDataUsage: () -> Unit = onOpenSettings,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
@@ -103,7 +105,6 @@ fun HomeScreen(
     val flightImpact = stringResource(R.string.confirm_flight_mode_on_impact)
     val turnOffLabel = stringResource(R.string.confirm_turn_off)
     val enableLabel = stringResource(R.string.confirm_enable)
-    val usageHint = stringResource(R.string.home_usage_tap_hint)
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -131,7 +132,7 @@ fun HomeScreen(
         item(key = "data_usage") {
             MonthlyDataUsageCard(
                 state = state,
-                onClick = { viewModel.emitFeedback(usageHint) }
+                onClick = onOpenDataUsage
             )
         }
 
@@ -239,7 +240,7 @@ fun HomeScreen(
                             } else {
                                 stringResource(R.string.tile_messages_none)
                             },
-                            onClick = onOpenSettings,
+                            onClick = onOpenMessages,
                             modifier = Modifier.weight(1f)
                         )
                     }

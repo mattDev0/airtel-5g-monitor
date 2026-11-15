@@ -177,3 +177,36 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
   - Wi-Fi TX power (`cmd 411`), WPS (`cmd 132`), Wi-Fi schedule (`cmd 503`), Guest Wi-Fi (`cmd 209`/`210`), and advanced channel/bandwidth forms.
   - Mobile network mode / 5G SA/NSA / LTE+NR CA selector (`cmd 218` SET), data roaming switch (`cmd 220` SET), and APN profile editor (`cmd 213`).
 - `SpeedUnitPreference` and `maskSensitive` are persisted from Settings UI; applying them across Home/Signal speed formatters and Phase 5 About Router / IMEI/ICCID rows completes in Phases 5–6.
+---
+
+## Phase 4 — Messages & Data Usage
+
+**Status:** Complete for SMS Inbox/Outbox pagination, mark-read, compose/reply/forward, delete, SMS settings, and billing-cycle / local daily data-usage history (verified by unit tests, lint, and debug APK build; USSD `cmd 350`, `cmd 337` limit SET, and remote `cmd 405–408` stats tables deferred because their second-hop sub-pages are absent from `~/airtelOdu-webui/`)
+
+### Implemented
+- **Web UI Schemas & Validation (`docs/ROUTER_API.md`, `Phase4Models.kt`, `SmsValidators.kt`):**
+  - Documented verified `POST` schemas for `cmd 12` (mark read / `"READ ALL"` + `page_num` / `subcmd` Base64 row decoding), `cmd 13` (Inbox `subcmd 0` / Outbox `subcmd 1` single, batch, and `"DELETE ALL"`), `cmd 14` (`phoneNo` + Base64 `content` + `message == "502"` storage-full handling), and `cmd 16` (`smsSw`, `maxSize`, conditional `dmCsca` when `smscSw == "1"`) under `## Write schemas`.
+  - Implemented `SmsValidators` matching `js/sms/smsInbox.js` and `js/sms/smsSetting.js`: `/^[\d+]\d{1,30}$/` recipient format, ZLT weighted length (`< 0x007F` = 1, `>= 0x007F` = 2), UTF-16 surrogate emoji rejection, and `50..1000` capacity bounds.
+- **SMS & Daily Usage Data Layer (`SmsRepository.kt`, `DailyUsageStore.kt`, `StatusRepository.kt`, `AppContainer.kt`):**
+  - Implemented `SmsRepository` handling Inbox/Outbox paged reads, `$`-to-space sender decoding, mark-read / mark-all-read with immediate unread badge synchronization (`cmd 394` / `StatusRepository.updateSmsUnreadCount`), SMS sending with `502` handling, single/all delete per folder, and `cmd 16` configuration save via `SettingsWriter`.
+  - Implemented `DailyUsageStore` (`InMemoryDailyUsageStore` + `SharedPreferencesDailyUsageStore`) retaining up to 31 days of locally tracked daily usage deltas from monotonic cumulative totals (including cross-day baseline carryover and mid-day billing cycle resets) and hooked it into `StatusRepository.pollFast`.
+- **Navigation, Messages & Data Usage UI (`Routes.kt`, `AppShell.kt`, `HomeScreen.kt`, `SettingsHubScreen.kt`, `MessagesViewModel.kt`, `MessagesScreen.kt`, `MessagesSheets.kt`, `DataUsageViewModel.kt`, `DataUsageScreen.kt`, `strings.xml`):**
+  - Added dedicated `MessagesRoute` and `DataUsageRoute` sub-screens in `AppShell.kt`, wired from the top `HeaderBar` unread SMS icon, Home `Messages` quick tile, Home `MonthlyDataUsageCard`, and Settings shortcuts.
+  - Built `MessagesScreen` + `MessagesSheets` with Inbox/Outbox segmented switcher, storage-full & disabled banners, Mark All Read, Next/Previous pagination, `MessageDetailSheet` (Reply, Forward, Delete), `ComposeSmsSheet` (with weighted counter and Tier-2 carrier-charge `ConfirmSheet`), and `SmsSettingsSheet`.
+  - Built `DataUsageScreen` displaying monthly progress ring, DL/UL split, plan limit, warning threshold, cycle day, remaining days, `LineChart` multi-day trend, and per-day breakdown with `Clear local history`.
+- **Tests:**
+  - Added `MessagesAndUsageTest.kt` (`4` tests covering `SmsValidators`, `SmsRepository` parsing/mark-read/Outbox delete/`502` send/conditional `dmCsca` settings, `InMemoryDailyUsageStore` delta & cycle-reset math, and `MessagesViewModel` + `DataUsageViewModel`).
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`78` unit tests across `14` test suites: `0` skipped, `0` failures, `0` errors; `lintDebug` passed with `0` errors and `37` warnings (`0` new warnings); `assembleDebug` built `app-debug.apk`).
+
+### Untested on Device / Live Router
+- Live ZLT X17M `cmd 12` Inbox/Outbox multi-page browsing, unread sync against `cmd 394`, and mark-read confirmation.
+- Tier-2 `cmd 14` SMS send, `cmd 13` delete, and `cmd 16` SMS settings persistence on real carrier SIM (never auto-sent against live router).
+- Multi-day accumulation in `SharedPreferencesDailyUsageStore` across live router polls.
+
+### Blocked / Deferred
+- Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/`:
+  - USSD dialer (`cmd 350`: `html/manage/ussd.html/.js`)
+  - Remote traffic limit / cycle write editor (`cmd 337` SET: `html/config/trafficLimit_settings.html/.js`)
+  - Remote router daily/hourly stats tables (`cmd 405–408`: `html/industry/trafficStat.html/.js`; local snapshot tracking fills in daily usage history)

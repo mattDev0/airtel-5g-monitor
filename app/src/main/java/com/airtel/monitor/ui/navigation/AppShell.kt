@@ -66,11 +66,15 @@ import com.airtel.monitor.ui.feature.devices.DevicesScreen
 import com.airtel.monitor.ui.feature.devices.DevicesViewModel
 import com.airtel.monitor.ui.feature.home.HomeScreen
 import com.airtel.monitor.ui.feature.home.HomeViewModel
+import com.airtel.monitor.ui.feature.messages.MessagesScreen
+import com.airtel.monitor.ui.feature.messages.MessagesViewModel
 import com.airtel.monitor.ui.feature.settings.SettingsHubScreen
 import com.airtel.monitor.ui.feature.settings.SettingsHubViewModel
 import com.airtel.monitor.ui.feature.signal.AlignmentScreen
 import com.airtel.monitor.ui.feature.signal.SignalScreen
 import com.airtel.monitor.ui.feature.signal.SignalViewModel
+import com.airtel.monitor.ui.feature.usage.DataUsageScreen
+import com.airtel.monitor.ui.feature.usage.DataUsageViewModel
 import com.airtel.monitor.ui.theme.AirtelTheme
 
 @Composable
@@ -91,7 +95,9 @@ fun AppShell(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    val isAlignmentFullScreen = currentDestination?.hasRoute(AlignmentRoute::class) == true
+    val isAlignmentFullScreen = currentDestination?.hasRoute(AlignmentRoute::class) == true ||
+        currentDestination?.hasRoute(MessagesRoute::class) == true ||
+        currentDestination?.hasRoute(DataUsageRoute::class) == true
     val selectedTab = when {
         currentDestination?.hasRoute(SignalRoute::class) == true -> TopLevelDestination.SIGNAL
         currentDestination?.hasRoute(DevicesRoute::class) == true -> TopLevelDestination.DEVICES
@@ -161,7 +167,7 @@ fun AppShell(
                             pollInterval = shellState.pollIntervalSeconds,
                             routerHost = shellState.routerHost,
                             smsUnreadCount = shellState.smsUnreadCount,
-                            onOpenSms = { navigateToTab(TopLevelDestination.SETTINGS) },
+                            onOpenSms = { navController.navigate(MessagesRoute) { launchSingleTop = true } },
                             onTogglePause = shellViewModel::togglePause,
                             onForceRefresh = shellViewModel::forceRefresh,
                             onSelectPollInterval = shellViewModel::setPollInterval,
@@ -211,6 +217,8 @@ fun AppShell(
                                     onOpenSignal = { navigateToTab(TopLevelDestination.SIGNAL) },
                                     onOpenDevices = { navigateToTab(TopLevelDestination.DEVICES) },
                                     onOpenSettings = { navigateToTab(TopLevelDestination.SETTINGS) },
+                                    onOpenMessages = { navController.navigate(MessagesRoute) { launchSingleTop = true } },
+                                    onOpenDataUsage = { navController.navigate(DataUsageRoute) { launchSingleTop = true } },
                                     sharedTransitionScope = this@SharedTransitionLayout,
                                     animatedVisibilityScope = this
                                 )
@@ -238,7 +246,26 @@ fun AppShell(
                             }
                             composable<SettingsRoute> {
                                 val settingsVm: SettingsHubViewModel = viewModel(factory = SettingsHubViewModel.factory(container))
-                                SettingsHubScreen(viewModel = settingsVm, contentPadding = listContentPadding)
+                                SettingsHubScreen(
+                                    viewModel = settingsVm,
+                                    contentPadding = listContentPadding,
+                                    onOpenMessages = { navController.navigate(MessagesRoute) { launchSingleTop = true } },
+                                    onOpenDataUsage = { navController.navigate(DataUsageRoute) { launchSingleTop = true } }
+                                )
+                            }
+                            composable<MessagesRoute> {
+                                val messagesVm: MessagesViewModel = viewModel(factory = MessagesViewModel.factory(container))
+                                MessagesScreen(
+                                    viewModel = messagesVm,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable<DataUsageRoute> {
+                                val usageVm: DataUsageViewModel = viewModel(factory = DataUsageViewModel.factory(container))
+                                DataUsageScreen(
+                                    viewModel = usageVm,
+                                    onBack = { navController.popBackStack() }
+                                )
                             }
                         }
                     }

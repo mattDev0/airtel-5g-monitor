@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CellTower
+import androidx.compose.material.icons.rounded.DataUsage
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
@@ -72,7 +74,9 @@ private enum class PendingConnectivityConfirm {
 @Composable
 fun SettingsHubScreen(
     viewModel: SettingsHubViewModel,
-    contentPadding: PaddingValues = PaddingValues(16.dp)
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    onOpenMessages: () -> Unit = {},
+    onOpenDataUsage: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val spacing = AirtelTheme.spacing
@@ -363,6 +367,24 @@ fun SettingsHubScreen(
                         modifier = Modifier.padding(top = spacing.xs)
                     )
                 }
+            }
+        }
+
+        item(key = "section_messages_usage") {
+            SectionCard(title = stringResource(R.string.messages_title)) {
+                SettingRow(
+                    title = stringResource(R.string.settings_messages_shortcut_title),
+                    subtitle = stringResource(R.string.settings_messages_shortcut_subtitle),
+                    leadingIcon = Icons.Rounded.MailOutline,
+                    onClick = onOpenMessages
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                SettingRow(
+                    title = stringResource(R.string.settings_usage_shortcut_title),
+                    subtitle = stringResource(R.string.settings_usage_shortcut_subtitle),
+                    leadingIcon = Icons.Rounded.DataUsage,
+                    onClick = onOpenDataUsage
+                )
             }
         }
 

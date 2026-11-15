@@ -9,11 +9,13 @@ import com.airtel.monitor.core.network.SettingsWriter
 import com.airtel.monitor.core.util.OuiVendorLookup
 import com.airtel.monitor.data.local.AliasRepository
 import com.airtel.monitor.data.local.PreferencesRepository
+import com.airtel.monitor.data.local.SharedPreferencesDailyUsageStore
 import com.airtel.monitor.data.repository.DeviceRepository
 import com.airtel.monitor.data.repository.LanRepository
 import com.airtel.monitor.data.repository.MobileRepository
 import com.airtel.monitor.data.repository.SignalRepository
 import com.airtel.monitor.data.repository.SimRepository
+import com.airtel.monitor.data.repository.SmsRepository
 import com.airtel.monitor.data.repository.StatusRepository
 import com.airtel.monitor.data.repository.SystemRepository
 import com.airtel.monitor.data.repository.WifiRepository
@@ -34,19 +36,25 @@ class AppContainer(application: Application) {
 
     val preferencesRepository = PreferencesRepository(application)
     val aliasRepository = AliasRepository(application)
+    val dailyUsageStore = SharedPreferencesDailyUsageStore(application)
     val ouiVendorLookup = OuiVendorLookup.fromAsset(application)
 
     val transport: RouterTransport = OkHttpRouterTransport()
     val routerSession = RouterSession(preferencesRepository, transport)
     val settingsWriter = SettingsWriter(routerSession)
 
-    val statusRepository = StatusRepository(routerSession, aliasRepository)
+    val statusRepository = StatusRepository(routerSession, aliasRepository, dailyUsageStore = dailyUsageStore)
     val signalRepository = SignalRepository(routerSession, settingsWriter)
     val deviceRepository = DeviceRepository(statusRepository, aliasRepository, ouiVendorLookup)
     val wifiRepository = WifiRepository(routerSession, settingsWriter)
     val mobileRepository = MobileRepository(routerSession, settingsWriter, statusRepository)
     val simRepository = SimRepository(routerSession, settingsWriter)
     val lanRepository = LanRepository(routerSession, settingsWriter)
+    val smsRepository = SmsRepository(
+        session = routerSession,
+        writer = settingsWriter,
+        onUnreadCountSync = { count -> statusRepository.updateSmsUnreadCount(count) }
+    )
     val systemRepository = SystemRepository(routerSession)
 
     val pollingCoordinator = PollingCoordinator(
