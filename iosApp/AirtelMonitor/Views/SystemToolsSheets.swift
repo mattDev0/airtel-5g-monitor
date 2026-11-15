@@ -80,7 +80,7 @@ public struct SystemLogsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var sizeKb = "200"
-    @State private var logGrade: LogGrade = .default
+    @State private var logGrade: LogGrade = .defaultLevel
 
     public init(viewModel: SystemToolsViewModel) { self.viewModel = viewModel }
 

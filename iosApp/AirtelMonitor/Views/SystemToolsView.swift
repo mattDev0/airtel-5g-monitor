@@ -132,7 +132,7 @@ public struct SystemToolsView: View {
                     }
                 }
             } else {
-                Text("Runs on-device hardware & modem diagnostic check (cmd 484).")
+                Text("Runs an on-device hardware and modem diagnostic self-check.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

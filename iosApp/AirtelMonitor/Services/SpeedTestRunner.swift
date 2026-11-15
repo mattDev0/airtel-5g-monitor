@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 public final class SpeedTestRunner: ObservableObject {
-    public static let defaultBaseUrl = "https://speed.cloudflare.com"
+    public nonisolated static let defaultBaseUrl = "https://speed.cloudflare.com"
 
     @Published public private(set) var progress = SpeedTestProgress()
 

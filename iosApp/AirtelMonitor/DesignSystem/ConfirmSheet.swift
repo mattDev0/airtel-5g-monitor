@@ -77,7 +77,7 @@ public struct ConfirmSheet: View {
                         Text("Type \"\(expectedText)\" to confirm:")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        TextField(expectedText, text: $typedInput)
+                        TextField("Type \(expectedText) here", text: $typedInput)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .textFieldStyle(.roundedBorder)
