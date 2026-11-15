@@ -2,75 +2,121 @@ import XCTest
 @testable import AirtelMonitor
 
 final class LockLogicTests: XCTestCase {
-
-    func testBandMaskMatchesRouterEncoding() {
-        XCTAssertEqual(BandMask.decode("120080800C5"), [1, 3, 7, 8, 20, 28, 38, 41])
-        XCTAssertEqual(BandMask.decode("20000000010000000000"), [41, 78])
-        XCTAssertEqual(BandMask.encode([1, 3, 7, 8, 20, 28, 38, 41]), "120080800c5")
-        XCTAssertEqual(BandMask.encode([3, 7]), "44")
-        XCTAssertEqual(BandMask.encode([78]), "20000000000000000000")
-        XCTAssertEqual(BandMask.encode([]), "")
+    func testBandMaskDecodeAndEncodeRoundTrip() {
+        XCTAssertEqual(BandMask.decode("0005"), [1, 3])
+        XCTAssertEqual(BandMask.decode("84"), [3, 8])
         XCTAssertEqual(BandMask.decode(""), [])
-        XCTAssertEqual(BandMask.decode("zz"), [])
+        XCTAssertEqual(BandMask.decode("INVALID"), [])
+
+        XCTAssertEqual(BandMask.encode([1, 3]), "5")
+        XCTAssertEqual(BandMask.encode([3, 8]), "84")
+        XCTAssertEqual(BandMask.encode([78]), "20000000000000000000")
+        XCTAssertEqual(BandMask.decode("20000000000000000000"), [78])
     }
 
-    func testParsesBandAndCellLock() {
-        let bands = LockLogic.parseBandLock([
-            "all_band_4g": "120080800C5", "band_4g_switch": "1", "band_4g_mask": "5",
-            "all_band_5g": "20000000010000000000", "band_5g_switch": "0", "band_5g_mask": "",
+    func testParsesBandLockAndCellLock() {
+        let bandCfg = RouterParsers.parseBandLock([
+            "band_4g_switch": "1",
+            "all_band_4g": "84",
+            "band_4g_mask": "4",
+            "band_5g_switch": "0",
+            "all_band_5g": "20000000000000000000",
+            "band_5g_mask": ""
         ])
-        XCTAssertEqual(bands.supported4g, [1, 3, 7, 8, 20, 28, 38, 41])
-        XCTAssertEqual(bands.locked4g, [1, 3])
-        XCTAssertTrue(bands.lock4gEnabled)
-        XCTAssertFalse(bands.lock5gEnabled)
+        XCTAssertTrue(bandCfg.lock4gEnabled)
+        XCTAssertEqual(bandCfg.supported4g, [3, 8])
+        XCTAssertEqual(bandCfg.locked4g, [3])
+        XCTAssertFalse(bandCfg.lock5gEnabled)
+        XCTAssertEqual(bandCfg.supported5g, [78])
 
-        let cells = LockLogic.parseCellLock([
-            "lte_lock_sw": "1", "lte_lock_freq": "225,1850", "lte_lock_pci": "456,", "lock_4g_flag": "1",
-            "nr_lock_sw": "1", "nr_lock_freq": "627264", "nr_lock_pci": "916", "nr_lock_cell_band": "78", "lock_5g_flag": "-1",
-            "FREQ": "225", "PCI": "456", "FREQ_5G": "627264", "PCI_5G": "916", "current_band_5g": "78",
+        let cellCfg = RouterParsers.parseCellLock([
+            "lte_lock_sw": "1",
+            "lte_lock_freq": "1650,3050",
+            "lte_lock_pci": "12,44",
+            "lock_4g_flag": "1",
+            "nr_lock_sw": "1",
+            "nr_lock_band": "78",
+            "nr_lock_freq": "633984",
+            "nr_lock_pci": "201",
+            "lock_5g_flag": "1"
         ])
-        XCTAssertEqual(cells.lteCells, [LteLockCell(earfcn: "225", pci: "456"), LteLockCell(earfcn: "1850", pci: "")])
-        XCTAssertEqual(cells.lteState, .locked)
-        XCTAssertEqual(cells.nrCells, [NrLockCell(band: "78", arfcn: "627264", pci: "916")])
-        XCTAssertEqual(cells.nrState, .failed)
-        XCTAssertEqual(cells.current5g, NrLockCell(band: "78", arfcn: "627264", pci: "916"))
+        XCTAssertTrue(cellCfg.lteEnabled)
+        XCTAssertEqual(cellCfg.lteCells, [
+            LteLockCell(earfcn: "1650", pci: "12"),
+            LteLockCell(earfcn: "3050", pci: "44")
+        ])
+        XCTAssertEqual(cellCfg.lteState, .locked)
+        XCTAssertTrue(cellCfg.nrEnabled)
+        XCTAssertEqual(cellCfg.nrCells, [
+            NrLockCell(band: "78", arfcn: "633984", pci: "201")
+        ])
+        XCTAssertEqual(cellCfg.nrState, .locked)
     }
 
-    func testValidation() {
-        var supported = BandLockConfig()
-        supported.supported4g = [1, 3, 7]
-        supported.supported5g = [41, 78]
-        XCTAssertNil(LockLogic.validateBands(lock4g: true, bands4g: [3], lock5g: true, bands5g: [78], supported: supported))
-        XCTAssertNotNil(LockLogic.validateBands(lock4g: true, bands4g: [], lock5g: false, bands5g: [], supported: supported))
-        XCTAssertNotNil(LockLogic.validateBands(lock4g: true, bands4g: [5], lock5g: false, bands5g: [], supported: supported))
+    func testCellValidationRules() {
+        XCTAssertNotNil(LockLogic.validateLteCells([]))
+        XCTAssertNotNil(LockLogic.validateLteCells([LteLockCell(earfcn: "999999", pci: "1")]))
+        XCTAssertNotNil(LockLogic.validateLteCells([LteLockCell(earfcn: "1650", pci: "504")]))
+        XCTAssertNil(LockLogic.validateLteCells([LteLockCell(earfcn: "1650", pci: "")]))
+        XCTAssertNotNil(LockLogic.validateLteCells([
+            LteLockCell(earfcn: "1650", pci: "12"),
+            LteLockCell(earfcn: "1650", pci: "12")
+        ]))
 
-        XCTAssertNil(LockLogic.validateLte([LteLockCell(earfcn: "225", pci: "456")]))
-        XCTAssertNil(LockLogic.validateLte([LteLockCell(earfcn: "225", pci: "")]))
-        XCTAssertNotNil(LockLogic.validateLte([LteLockCell(earfcn: "225", pci: "504")]))
-        XCTAssertNotNil(LockLogic.validateLte([LteLockCell(earfcn: "x", pci: "1")]))
-        XCTAssertNotNil(LockLogic.validateLte([]))
-        XCTAssertNotNil(LockLogic.validateLte([LteLockCell(earfcn: "225", pci: "1"), LteLockCell(earfcn: "225", pci: "1")]))
-
-        XCTAssertNil(LockLogic.validateNr([NrLockCell(band: "78", arfcn: "627264", pci: "916")]))
-        XCTAssertNotNil(LockLogic.validateNr([NrLockCell(band: "300", arfcn: "627264", pci: "1")]))
-        XCTAssertNotNil(LockLogic.validateNr([NrLockCell(band: "78", arfcn: "627264", pci: "1008")]))
-    }
-}
-
-final class NetworkControlsTests: XCTestCase {
-    func testFlagParsing() {
-        XCTAssertEqual(NetworkControls.flag(["dialMode": "1"], "dialMode"), true)
-        XCTAssertEqual(NetworkControls.flag(["dialMode": "0"], "dialMode"), false)
-        XCTAssertEqual(NetworkControls.flag(["flightMode": 1], "flightMode"), true)
-        XCTAssertNil(NetworkControls.flag([:], "dialMode"))
-        XCTAssertNil(NetworkControls.flag(["dialMode": ""], "dialMode"))
+        XCTAssertNotNil(LockLogic.validateNrCells([]))
+        XCTAssertNotNil(LockLogic.validateNrCells([NrLockCell(band: "300", arfcn: "633984", pci: "10")]))
+        XCTAssertNotNil(LockLogic.validateNrCells([NrLockCell(band: "78", arfcn: "0", pci: "10")]))
+        XCTAssertNotNil(LockLogic.validateNrCells([NrLockCell(band: "78", arfcn: "633984", pci: "1008")]))
+        XCTAssertNil(LockLogic.validateNrCells([NrLockCell(band: "78", arfcn: "633984", pci: "201")]))
     }
 
-    func testAcceptedMatchesWebUI() {
-        XCTAssertTrue(NetworkControls.accepted(["message": "0"]))
-        XCTAssertTrue(NetworkControls.accepted(["success": true]))
-        XCTAssertFalse(NetworkControls.accepted(["message": "1"]))
-        XCTAssertFalse(NetworkControls.accepted(["success": false, "message": ""]))
-        XCTAssertFalse(NetworkControls.accepted([:]))
+    @MainActor
+    func testSignalRepositoryBandAndCellLockWriteFlow() async {
+        let transport = MockRouterTransport()
+        await transport.configureAuth(sessionId: "sid-lock-1", challenge: "tok-1")
+        await transport.setHandler(cmd: 161, method: "GET") { _ in
+            .ok([
+                "band_4g_switch": "0",
+                "all_band_4g": "84",
+                "band_4g_mask": "",
+                "band_5g_switch": "0",
+                "all_band_5g": "20000000000000000000",
+                "band_5g_mask": ""
+            ])
+        }
+        await transport.setHandler(cmd: 161, method: "POST") { _ in
+            await transport.setHandler(cmd: 161, method: "GET") { _ in
+                .ok([
+                    "band_4g_switch": "1",
+                    "all_band_4g": "84",
+                    "band_4g_mask": "4",
+                    "band_5g_switch": "0",
+                    "all_band_5g": "20000000000000000000",
+                    "band_5g_mask": ""
+                ])
+            }
+            return .ok(["success": true])
+        }
+
+        let session = RouterSession(
+            transport: transport,
+            credentialsProvider: { RouterCredentials(host: "192.168.1.1", username: "user", password: "pw") }
+        )
+        let writer = SettingsWriter(session: session, sleepFn: { _ in })
+        let repo = SignalRepository(session: session, writer: writer)
+
+        let unsupported = await repo.saveBandLock(lock4g: true, bands4g: [41], lock5g: false, bands5g: [])
+        XCTAssertFalse(unsupported.isOk)
+
+        let saved = await repo.saveBandLock(lock4g: true, bands4g: [3], lock5g: false, bands5g: [])
+        guard case .ok(let cfg) = saved else {
+            return XCTFail("Expected saveBandLock to succeed")
+        }
+        XCTAssertTrue(cfg.lock4gEnabled)
+        XCTAssertEqual(cfg.locked4g, [3])
+
+        let writes = await transport.recordedRequests().filter { $0.cmd == 161 && $0.method == "POST" }
+        XCTAssertEqual(writes.count, 1)
+        XCTAssertEqual(writes.first?.payload["lock4gBand"] as? String, "4")
     }
 }

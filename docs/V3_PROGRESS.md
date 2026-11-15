@@ -376,3 +376,28 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
 ### Deferred / Untested on Hardware
 - Live ZLT X17M verification of the updated Phase 7.2 behaviors (`cmd 337` Calibrate vs Clear, `cmd 51 subcmd 4` PIN change, and upgrading-user onboarding skip).
 
+---
+
+## Phase 8 — iOS Parity
+
+**Status:** Implemented v3 SwiftUI architecture & unit tests under `iosApp/` (`Swift 5.9`, `iOS 16.0` minimum deployment target, `Xcode 26` SDK + `#available(iOS 26.0, *)` Liquid Glass, `XcodeGen`); verification runs via `.github/workflows/ios-build.yml` on `macos-15`.
+
+### Implemented
+- **Core, Auth, Keychain & Write Safety (`AppPreferencesStore.swift`, `KeychainPasswordStore.swift`, `RouterResult.swift`, `RouterSession.swift`, `SettingsWriter.swift`, `Validators.swift`, `OuiVendorLookup.swift`):**
+  - Migrated legacy credentials (`UserDefaults` `SettingsStore`) into `SystemKeychainStore` (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`) + `AppPreferencesStore` (backfilling `onboardingCompleted` on migrated saved-password installs and keeping Keychain out of `UserDefaults`).
+  - Built actor-based `RouterSession` (`cmd 232` -> `cmd 100` SHA-256 auth, `cmd 233` write token, single coalesced relogin on `"NO_AUTH"`/`"LOGIN_TIMEOUT"`, `"LIMITED_ACCESS"` mapping) and `SettingsWriter` (pre-read, no blind `POST` retry, read-back verify polling, and `cmd 20` `applyFilter()`).
+  - Ported `BandMask`, `NetworkFormatters` (incl. `Mbps` / `MB/s` and `MB`/`GB`/`TB`), `SensitiveFormatters`, `WifiAndLanValidators`, `SmsValidators`, and `Phase71Validators` (MAC/IPv4/IPv6/port/`cmd 400`/WPS PIN/APN/USSD UTF-16BE decoding).
+- **Models & Parsers (`RouterModels.swift`, `SignalAndUsageModels.swift`, `AdvancedModels.swift`, `RouterFeatureFlags.swift`, `Parsers.swift`):**
+  - Ported `RouterFeatureFlags` (`cmd 80` `web_page_hide` hex bit decoding, `pageHideCheck`/`pageHideCheck2`/`pageHideCheck3`, `aeraId`, `network_mode`, `ip_passthrough_sw`, `lock_plmn_flag`, `wifi_ssid_forbid`, `wifi_pwd_forbid`).
+  - Ported `CarrierParser`, `RouterParsers`, and `Phase1Parsers` (4G/5G CA pills, swapped `ul_mon_flow`/`dl_mon_flow` + `currentFlowMb` = `flow_dl + flow_ul`, alignment snapshots, neighbor scan, `cmd 1018` history, Base64 UTF-8 SMS codec).
+- **Repositories & Services (`Repositories/*.swift`, `Services/*.swift`, `AppContainer.swift`):**
+  - Implemented `FeatureFlagRepository`, `StatusRepository` (2s/20s split polling + 62-day local usage delta tracking), `SignalRepository`, `DeviceRepository`, `WifiRepository` (`cmd 417`/`wifiMode` guards, TX power `cmd 411`/per-band, Guest Wi-Fi, Advanced DFS 160 MHz clamp, WPS PBC/PIN/Random PIN, Schedule `cmd 503`), `MobileRepository` (Mode `cmd 256`, CA `cmd 226`, Roaming `cmd 220`, APN `cmd 213`/`248`, Traffic `cmd 337` limit/calibrate/clear), `SimRepository` (`cmd 51` subcmd 1/2/3/4), `SmsRepository`, `UssdRepository`, `LanRepository` (LAN/DHCP/DNS + Static Leases `cmd 115`/`24`), `ParentalControlRepository` (`cmd 391`/`382`/`383`/`385`), `SecurityRepository` (`cmd 367`/`504`/`172`/`275`/`333`/`27`/`32`/`23`/`26`/`28`/`29`/`30`/`502`), `SystemRepository` (About `cmd 207`/`133`/`113`, Logs `cmd 17`/`322`, Scheduled Reboot `cmd 263`, Time `cmd 11`/`321`, WAN Detect `cmd 336`, Password `cmd 102`, Self-Check `cmd 484`, Ping/Trace `cmd 168`/`204`, Reboot `cmd 99`, Reset `cmd 112`), and `AlertEvaluator`.
+  - Built `PollingCoordinator` (2 s active poll lifecycle + scene-phase pause/resume), `NetworkGatewayDetector`, `AlignmentTonePlayer`, and `SpeedTestRunner` (Cloudflare latency/DL/UL).
+- **Design System, ViewModels & Views (`DesignSystem/*.swift`, `ViewModels/*.swift`, `Views/*.swift`):**
+  - Built iOS 16+ contrast theme (`AirtelTheme`), `#available(iOS 26.0, *)` Liquid Glass card/capsule/button modifiers & tab-bar minimize modifier, custom Sparkline/Line/Bar charts, QR code generator, and Tier 1/2/3 `ConfirmSheet`.
+  - Replaced all v2 views with full v3 SwiftUI screens & modal sheets (`AppShellView`, `OnboardingView`, `HomeView`, `SignalView`, `LockEditorSheet`, `AlignmentView`, `DevicesView`, `DeviceDetailSheet`, `DevicePolicySheets`, `SettingsHubView`, `WifiSettingsSheets`, `MobileLanSettingsSheets`, `MessagesView`, `DataUsageView`, `SecurityView`, `SecurityRuleSheets`, `SystemToolsView`, `SystemToolsSheets`) and removed all legacy v2 files.
+  - Preserved `MARKETING_VERSION: "2.6.0"`, `CURRENT_PROJECT_VERSION: 12`, and `Info.plist` keys (`UILaunchStoryboardName`, `NSLocalNetworkUsageDescription`, `NSAppTransportSecurity`); first-pass WidgetKit / BackgroundTasks intentionally out of scope per `REBUILD_PLAN.md §0`.
+- **Tests (`iosApp/AirtelMonitorTests/`):**
+  - Updated `LockLogicTests.swift` and added `RouterSessionAndWriterTests.swift`, `ParsersAndValidatorsTests.swift`, and `RepositoriesTests.swift` covering SHA-256 auth, relogin, `LIMITED_ACCESS`, `SettingsWriter`, `BandMask`/cell validation, `RouterFeatureFlags`, parsers, validators, offline `MockRouterTransport` repositories, and `AlertEvaluator`.
+
+

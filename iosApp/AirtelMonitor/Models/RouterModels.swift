@@ -24,30 +24,41 @@ public enum DeviceType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// Device list filters and sort orders, same as the Android app.
-public enum DeviceFilter: CaseIterable { case all, wifi5g, wifi24g, lan
-    public var label: String {
-        switch self {
-        case .all: return "All"
-        case .wifi5g: return "5 GHz"
-        case .wifi24g: return "2.4 GHz"
-        case .lan: return "LAN"
-        }
-    }
+public enum DeviceFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case wifi5g = "5 GHz"
+    case wifi24g = "2.4 GHz"
+    case lan = "LAN"
+
+    public var id: String { rawValue }
+    public var label: String { rawValue }
 }
 
-public enum DeviceSort: CaseIterable { case speed, signal, name, ip
-    public var label: String {
-        switch self {
-        case .speed: return "Speed"
-        case .signal: return "Signal Quality"
-        case .name: return "Name"
-        case .ip: return "IP Address"
-        }
-    }
+public enum DevicePresenceFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case online = "Online"
+    case offline = "Offline"
+
+    public var id: String { rawValue }
+    public var label: String { rawValue }
 }
 
-public enum ConnectionStatus { case connected, connecting, reconnecting }
+public enum DeviceSort: String, CaseIterable, Identifiable {
+    case speed = "Speed"
+    case signal = "Signal"
+    case name = "Name"
+    case ip = "IP"
+
+    public var id: String { rawValue }
+    public var label: String { rawValue }
+}
+
+public enum ConnectionStatus: Equatable {
+    case connected
+    case connecting
+    case reconnecting
+    case disconnected
+}
 
 public struct DeviceItem: Identifiable, Equatable, Hashable {
     public var id: String { mac.isEmpty ? ip : mac }
@@ -66,6 +77,10 @@ public struct DeviceItem: Identifiable, Equatable, Hashable {
     public let expires: String
     public let ipv6: String
     public let isRouter: Bool
+    public var vendor: String
+    public var isPrivateMac: Bool
+    public var isOnline: Bool
+    public var hasCustomAlias: Bool
 
     public var displayName: String {
         alias.isEmpty ? hostname : alias
@@ -86,7 +101,11 @@ public struct DeviceItem: Identifiable, Equatable, Hashable {
         interfaceName: String = "wlan",
         expires: String = "",
         ipv6: String = "",
-        isRouter: Bool = false
+        isRouter: Bool = false,
+        vendor: String = "",
+        isPrivateMac: Bool = false,
+        isOnline: Bool = true,
+        hasCustomAlias: Bool = false
     ) {
         self.mac = mac
         self.ip = ip
@@ -103,6 +122,10 @@ public struct DeviceItem: Identifiable, Equatable, Hashable {
         self.expires = expires
         self.ipv6 = ipv6
         self.isRouter = isRouter
+        self.vendor = vendor
+        self.isPrivateMac = isPrivateMac
+        self.isOnline = isOnline
+        self.hasCustomAlias = hasCustomAlias
     }
 }
 
@@ -176,6 +199,10 @@ public struct CellularMetrics: Equatable {
     public let nrCqi: String
     public let lteCqi: String
     public let nrQamDl: String
+    public let rsrq5g: String
+    public let rssi5g: String
+    public let rsrq4g: String
+    public let rssi4g: String
 
     public init(
         networkType: String = "-",
@@ -189,7 +216,11 @@ public struct CellularMetrics: Equatable {
         iduType: String = "ZLT W304VA PRO",
         nrCqi: String = "-",
         lteCqi: String = "-",
-        nrQamDl: String = "-"
+        nrQamDl: String = "-",
+        rsrq5g: String = "-",
+        rssi5g: String = "-",
+        rsrq4g: String = "-",
+        rssi4g: String = "-"
     ) {
         self.networkType = networkType
         self.signalLvl = signalLvl
@@ -203,6 +234,14 @@ public struct CellularMetrics: Equatable {
         self.nrCqi = nrCqi
         self.lteCqi = lteCqi
         self.nrQamDl = nrQamDl
+        self.rsrq5g = rsrq5g
+        self.rssi5g = rssi5g
+        self.rsrq4g = rsrq4g
+        self.rssi4g = rssi4g
+    }
+
+    public var has5gMetrics: Bool {
+        [rsrp5g, rsrq5g, sinr5g, rssi5g, nrCqi].contains { !$0.isEmpty && $0 != "-" }
     }
 }
 
@@ -221,7 +260,6 @@ public struct CellLockInfo: Equatable {
     public let nrLockFreq: String
     public let bandLock4gEnabled: Bool
     public let bandLock5gEnabled: Bool
-    /// cmd 218 switches; nil until the router has reported them.
     public let mobileDataOn: Bool?
     public let flightModeOn: Bool?
 
@@ -274,8 +312,36 @@ public struct HardwareMetrics: Equatable {
     }
 }
 
+public struct NetworkModeSnapshot: Equatable {
+    public let mobileDataOn: Bool?
+    public let flightModeOn: Bool?
+    public let networkMode: String
+    public let mode5g: String
+    public let roamingEnable: Bool
+    public let lteCa: Bool
+    public let nrCa: Bool
+
+    public init(
+        mobileDataOn: Bool? = nil,
+        flightModeOn: Bool? = nil,
+        networkMode: String = "",
+        mode5g: String = "",
+        roamingEnable: Bool = false,
+        lteCa: Bool = true,
+        nrCa: Bool = true
+    ) {
+        self.mobileDataOn = mobileDataOn
+        self.flightModeOn = flightModeOn
+        self.networkMode = networkMode
+        self.mode5g = mode5g
+        self.roamingEnable = roamingEnable
+        self.lteCa = lteCa
+        self.nrCa = nrCa
+    }
+}
+
 public struct RouterState: Equatable {
-    public let timestamp: Int64
+    public let timestampMs: Int64
     public let timeFormatted: String
     public let wan: WanMetrics
     public let cellular: CellularMetrics
@@ -283,18 +349,40 @@ public struct RouterState: Equatable {
     public let hardware: HardwareMetrics
     public let devices: [DeviceItem]
     public let history: [BandwidthPoint]
+    public let carriers: [CarrierComponent]
+    public let linkDetails: LinkDetails
+    public let cellIdentity: CellIdentity
+    public let signalHistory: [SignalHistoryPoint]
+    public let monthlyUsage: MonthlyUsageSummary
+    public let networkModeSnapshot: NetworkModeSnapshot
+    public let unreadSmsCount: Int
+    public let wanIp: String
+    public let wanIpv6: String
+    public let onlineDurationText: String
+    public let uptimeText: String
 
     public init(
-        timestamp: Int64 = 0,
+        timestampMs: Int64 = 0,
         timeFormatted: String = "--:--:--",
         wan: WanMetrics = WanMetrics(),
         cellular: CellularMetrics = CellularMetrics(),
         cellLock: CellLockInfo = CellLockInfo(),
         hardware: HardwareMetrics = HardwareMetrics(),
         devices: [DeviceItem] = [],
-        history: [BandwidthPoint] = []
+        history: [BandwidthPoint] = [],
+        carriers: [CarrierComponent] = [],
+        linkDetails: LinkDetails = LinkDetails(),
+        cellIdentity: CellIdentity = CellIdentity(),
+        signalHistory: [SignalHistoryPoint] = [],
+        monthlyUsage: MonthlyUsageSummary = MonthlyUsageSummary(),
+        networkModeSnapshot: NetworkModeSnapshot = NetworkModeSnapshot(),
+        unreadSmsCount: Int = 0,
+        wanIp: String = "--",
+        wanIpv6: String = "",
+        onlineDurationText: String = "--",
+        uptimeText: String = "--"
     ) {
-        self.timestamp = timestamp
+        self.timestampMs = timestampMs
         self.timeFormatted = timeFormatted
         self.wan = wan
         self.cellular = cellular
@@ -302,6 +390,17 @@ public struct RouterState: Equatable {
         self.hardware = hardware
         self.devices = devices
         self.history = history
+        self.carriers = carriers
+        self.linkDetails = linkDetails
+        self.cellIdentity = cellIdentity
+        self.signalHistory = signalHistory
+        self.monthlyUsage = monthlyUsage
+        self.networkModeSnapshot = networkModeSnapshot
+        self.unreadSmsCount = unreadSmsCount
+        self.wanIp = wanIp
+        self.wanIpv6 = wanIpv6
+        self.onlineDurationText = onlineDurationText
+        self.uptimeText = uptimeText
     }
 }
 
@@ -373,9 +472,6 @@ public struct DiagnosisState: Equatable {
     }
 }
 
-// MARK: - Band lock (cmd 161) & local physical cell lock (cmd 160)
-
-/// Which LTE/NR bands the modem may use. Band numbers, e.g. 3 = B3, 78 = n78.
 public struct BandLockConfig: Hashable {
     public var lock4gEnabled = false
     public var supported4g: [Int] = []
