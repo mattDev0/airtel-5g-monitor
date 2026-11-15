@@ -176,7 +176,7 @@ public final class SettingsHubViewModel: ObservableObject {
         activeSheet = sheet
         switch sheet {
         case .wifi24g, .wifi5g, .wifiQr:
-            runLoad { _ = await self.container.wifiRepository.loadWifiBandDetails() }
+            runLoad { await self.container.wifiRepository.loadWifiBandDetails() }
         case .guestWifi:
             runLoad {
                 _ = await self.container.featureFlagRepository.load()

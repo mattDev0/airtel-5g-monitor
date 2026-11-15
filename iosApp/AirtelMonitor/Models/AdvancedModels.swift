@@ -86,6 +86,7 @@ public struct WifiBandStatus: Equatable, Sendable {
     public let visibleBroadcast: Bool
     public let channel: String
     public let wifiSames: Bool
+    public let hasWifiSames: Bool
     public let maxStaNum: String
 
     public init(
@@ -96,6 +97,7 @@ public struct WifiBandStatus: Equatable, Sendable {
         visibleBroadcast: Bool = true,
         channel: String = "0",
         wifiSames: Bool = false,
+        hasWifiSames: Bool = false,
         maxStaNum: String = ""
     ) {
         self.enabled = enabled
@@ -105,6 +107,7 @@ public struct WifiBandStatus: Equatable, Sendable {
         self.visibleBroadcast = visibleBroadcast
         self.channel = channel
         self.wifiSames = wifiSames
+        self.hasWifiSames = hasWifiSames
         self.maxStaNum = maxStaNum
     }
 
@@ -126,6 +129,9 @@ public struct WifiBandDetails: Equatable, Sendable {
     public let band5g: WifiBandStatus
     public let forbidSsids: [String]
     public let forbidKeys: [String]
+
+    public var wifiSamesSupported: Bool { band24g.hasWifiSames || band5g.hasWifiSames }
+    public var wifiSamesEnabled: Bool { band24g.wifiSames || band5g.wifiSames }
 
     public init(
         band24g: WifiBandStatus = WifiBandStatus(),

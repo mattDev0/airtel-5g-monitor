@@ -130,10 +130,10 @@ public final class StatusRepository: ObservableObject {
             lastErrorMessage = res18.errorMessage
             if case .notLoggedIn = res18 {
                 isAuthError = true
-                connectionStatus = .error
+                connectionStatus = .disconnected
             } else {
                 isAuthError = false
-                connectionStatus = .error
+                connectionStatus = .disconnected
             }
             return res18.castFailure()
         }

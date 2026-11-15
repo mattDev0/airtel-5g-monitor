@@ -218,6 +218,7 @@ public enum RouterParsers {
             visibleBroadcast: broadcastVal != "0",
             channel: CodecHelpers.firstNonBlank(json, keys: ["channel"], defaultValue: "0"),
             wifiSames: CodecHelpers.str(json, "wifiSames") == "1",
+            hasWifiSames: json["wifiSames"] != nil,
             maxStaNum: CodecHelpers.str(json, "maxStaNum")
         )
     }

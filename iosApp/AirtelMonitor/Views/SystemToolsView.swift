@@ -77,9 +77,9 @@ public struct SystemToolsView: View {
                     )
                     StatTile(
                         title: "Ping",
-                        value: p.latencyMs > 0 ? String(format: "%.0f", p.latencyMs) : "--",
+                        value: (p.latencyMs ?? 0) > 0 ? String(format: "%.0f", p.latencyMs ?? 0) : "--",
                         unit: "ms",
-                        caption: p.jitterMs > 0 ? String(format: "Jitter %.1fms", p.jitterMs) : nil,
+                        caption: (p.jitterMs ?? 0) > 0 ? String(format: "Jitter %.1fms", p.jitterMs ?? 0) : nil,
                         accent: AirtelTheme.info
                     )
                 }
