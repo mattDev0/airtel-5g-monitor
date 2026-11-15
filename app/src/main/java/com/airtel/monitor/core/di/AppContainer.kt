@@ -13,6 +13,7 @@ import com.airtel.monitor.data.repository.DeviceRepository
 import com.airtel.monitor.data.repository.LanRepository
 import com.airtel.monitor.data.repository.MobileRepository
 import com.airtel.monitor.data.repository.SignalRepository
+import com.airtel.monitor.data.repository.SimRepository
 import com.airtel.monitor.data.repository.StatusRepository
 import com.airtel.monitor.data.repository.SystemRepository
 import com.airtel.monitor.data.repository.WifiRepository
@@ -44,6 +45,7 @@ class AppContainer(application: Application) {
     val deviceRepository = DeviceRepository(statusRepository, aliasRepository, ouiVendorLookup)
     val wifiRepository = WifiRepository(routerSession, settingsWriter)
     val mobileRepository = MobileRepository(routerSession, settingsWriter, statusRepository)
+    val simRepository = SimRepository(routerSession, settingsWriter)
     val lanRepository = LanRepository(routerSession, settingsWriter)
     val systemRepository = SystemRepository(routerSession)
 

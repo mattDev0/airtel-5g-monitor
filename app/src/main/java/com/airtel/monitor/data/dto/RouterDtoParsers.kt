@@ -345,3 +345,27 @@ fun decodeBase64Utf8(raw: String): String {
         raw
     }
 }
+
+private const val BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+/** Pure Kotlin RFC 4648 Base64 encoder for API 24+ and JVM unit tests. */
+fun encodeBase64Utf8(raw: String): String {
+    val bytes = raw.toByteArray(Charsets.UTF_8)
+    if (bytes.isEmpty()) return ""
+    val out = StringBuilder(((bytes.size + 2) / 3) * 4)
+    var i = 0
+    while (i < bytes.size) {
+        val b0 = bytes[i].toInt() and 0xFF
+        val hasB1 = i + 1 < bytes.size
+        val hasB2 = i + 2 < bytes.size
+        val b1 = if (hasB1) bytes[i + 1].toInt() and 0xFF else 0
+        val b2 = if (hasB2) bytes[i + 2].toInt() and 0xFF else 0
+
+        out.append(BASE64_ALPHABET[b0 ushr 2])
+        out.append(BASE64_ALPHABET[((b0 and 0x03) shl 4) or (b1 ushr 4)])
+        out.append(if (hasB1) BASE64_ALPHABET[((b1 and 0x0F) shl 2) or (b2 ushr 6)] else '=')
+        out.append(if (hasB2) BASE64_ALPHABET[b2 and 0x3F] else '=')
+        i += 3
+    }
+    return out.toString()
+}

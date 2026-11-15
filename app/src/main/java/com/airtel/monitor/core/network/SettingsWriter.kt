@@ -13,6 +13,7 @@ data class WriteSpec<T>(
     val readExtra: Map<String, Any> = emptyMap(),
     val preflight: (current: JSONObject) -> RouterResult<Unit>? = { null },
     val buildPayload: (current: JSONObject) -> Map<String, Any>,
+    val verifyPost: (postJson: JSONObject) -> RouterResult<Unit>? = { null },
     val verify: (readBack: JSONObject) -> Boolean,
     val parseResult: (readBack: JSONObject) -> T,
     val writeTimeoutSeconds: Long = 20L,
@@ -80,6 +81,10 @@ class SettingsWriter(
                     message = msg.ifEmpty { "Router rejected changes for cmd ${spec.cmd}" },
                     rawBody = postJson.toString()
                 )
+            }
+            spec.verifyPost(postJson)?.let { postFailure ->
+                @Suppress("UNCHECKED_CAST")
+                return postFailure as RouterResult<T>
             }
         }
 

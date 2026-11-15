@@ -138,3 +138,42 @@ App version: `3.0.0-dev` (`versionCode` 10, `applicationId "dev.mattdev0.airtelm
   - Parental controls (`cmd 382` / `383` / `385` / `391`: `html/parent/parentControl.html`, `parentSpeed.html`, `parentTime.html`, `parentUrl.html`, gated by `parentControlSwitch` / `pageHideCheck(153)`)
 
 
+---
+
+## Phase 3 — Settings: Wi-Fi, Mobile & SIM PIN, LAN/DHCP
+
+**Status:** Complete for verified Wi-Fi credentials & radio controls, offline Wi-Fi QR sharing, SIM PIN/PUK management, full LAN/DHCP/DNS editing, Mobile controls, Network Diagnosis, and App Preferences (unit tests, lint, and debug APK verified; deferred second-hop sub-pages absent from `~/airtelOdu-webui/`)
+
+### Implemented
+- **Offline QR Generator & Input Validators (`QrCodeGenerator.kt`, `WifiAndLanValidators.kt`, `RouterDtoParsers.kt`):**
+  - Implemented pure-Kotlin ISO/IEC 18004 QR Code encoder (`Byte` mode, ECC Level `M`, Versions 1–10 up to 213 UTF-8 bytes) plus `formatWifiQrPayload` (`WIFI:T:...;S:...;P:...;;`) with zero external Maven dependencies.
+  - Added ZLT web-UI validation rules from `js/step_rules.js`: SSID UTF-8 byte length (`1..32`), whitespace/semicolon/backslash guards, `cmd 80` forbid-list enforcement, WPA key validation (`8..63` chars), IPv4/contiguous subnet-mask/DHCP pool checks, and 4–8 digit PIN / 8-digit PUK checks.
+  - Added pure-Kotlin `encodeBase64Utf8` in `RouterDtoParsers.kt` for JVM unit tests and API 24+ compatibility.
+- **Models & Safe Write Pipeline (`Phase3Models.kt`, `SettingsWriter.kt`, `WifiRepository.kt`, `LanRepository.kt`, `SimRepository.kt`, `AppContainer.kt`):**
+  - Added `WifiBandDetail`, `WifiBandDetails`, `LanConfig`, and `SimPinState`.
+  - Added defaulted `verifyPost` hook to `WriteSpec` in `SettingsWriter.kt` so router replies with `{ "success": true, "message": "<nonzero>" }` (such as `cmd 51`) fail cleanly.
+  - Extended `WifiRepository` with `bandDetails`, `loadWifiBandDetails()` (including best-effort `cmd 80` `wifi_ssid_forbid` / `wifi_pwd_forbid`), and `saveWifiBandConfig(...)` (Base64 SSID, security mode, key, hidden broadcast, `wifiSames`, and optional paired 2.4 GHz + 5 GHz sync).
+  - Extended `LanRepository` with `lanConfig`, `loadLanConfig()`, and `saveLanDhcpSettings(...)` preserving all `LAN_SAVE_KEYS` and `bindPort0` when `supportList` is present.
+  - Implemented `SimRepository` (`loadSimStatus`, `setPinLockEnabled`, `unlockPin`, `unlockPuk`, `changePin`) across `cmd 113`, `cmd 134`, and `cmd 51`, refreshing remaining attempt counters after any rejected write.
+- **Settings Hub Material 3 Refactor & Bottom Sheets (`SettingsHubViewModel.kt`, `SettingsSheets.kt`, `SettingsHubScreen.kt`, `strings.xml`):**
+  - Replaced legacy `LanDnsCard.kt` and `WifiRadiosCard.kt` with Material 3 `SectionCard` + `SettingRow` / `SettingSwitchRow` / `SettingValueRow` sections (`Router Connection`, `Wi-Fi Networks`, `Mobile & SIM`, `LAN & DHCP`, `Diagnostics & Tools`, `App Preferences`).
+  - Added Tier-2 connectivity `ConfirmSheet` guards before toggling Wi-Fi radios, changing Wi-Fi credentials, saving LAN/DHCP changes, or toggling Mobile Data / Airplane Mode.
+  - Added bottom sheets for editing 2.4 GHz / 5 GHz Wi-Fi (`WifiEditSheet`), sharing credentials via in-app QR (`WifiQrSheet`), managing SIM PIN/PUK (`SimPinSheet`), and editing Router IP / Subnet Mask / DHCP Pool / Lease / DNS (`LanDhcpEditorSheet`, with optional auto-update of the app's stored router host if gateway IP changes).
+  - Added App Preferences persistence controls (`ThemePreference`, `SpeedUnitPreference`, `maskSensitive`) and updated `docs/ROUTER_API.md` under `## Write schemas`.
+- **Tests:**
+  - Added `QrCodeGeneratorTest.kt` (`4` tests covering `WIFI:` URI escaping, QR matrix sizing V1/V2/V3/V10, finder/timing/dark-module invariants, and `WifiAndLanValidators`).
+  - Added `WifiLanSimAndSettingsTest.kt` (`4` tests covering `WifiRepository`, `LanRepository`, `SimRepository`, and `SettingsHubViewModel` host migration).
+
+### Checks Run
+- `sh ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain` — **PASSED** (`74` unit tests across `13` test suites: `0` skipped, `0` failures, `0` errors; `lintDebug` passed with `0` errors and `37` warnings; `assembleDebug` built `app-debug.apk`).
+
+### Untested on Device / Live Router
+- Live ZLT X17M validation of `cmd 2` / `cmd 211` SSID/key/security edits, paired `wifiSames` behavior, and client Wi-Fi reconnection after credential change.
+- Live `cmd 134` / `cmd 51` SIM PIN lock toggle, unlock, and change behavior (**never** intentionally enter wrong PINs or test PUK against an active production SIM).
+- Live `cmd 3` DHCP pool, subnet mask, and gateway IP edit with app host migration (`updateHostIfChanged`) and QR code scanning compatibility on Pixel 6 / iPhone 12 Pro.
+
+### Blocked / Deferred
+- Uncaptured second-hop `secondMenuClick` pages absent from `~/airtelOdu-webui/` (write payloads omitted rather than guessed):
+  - Wi-Fi TX power (`cmd 411`), WPS (`cmd 132`), Wi-Fi schedule (`cmd 503`), Guest Wi-Fi (`cmd 209`/`210`), and advanced channel/bandwidth forms.
+  - Mobile network mode / 5G SA/NSA / LTE+NR CA selector (`cmd 218` SET), data roaming switch (`cmd 220` SET), and APN profile editor (`cmd 213`).
+- `SpeedUnitPreference` and `maskSensitive` are persisted from Settings UI; applying them across Home/Signal speed formatters and Phase 5 About Router / IMEI/ICCID rows completes in Phases 5–6.

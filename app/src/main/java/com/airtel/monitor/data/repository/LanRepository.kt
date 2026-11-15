@@ -5,8 +5,10 @@ import com.airtel.monitor.core.network.RouterSession
 import com.airtel.monitor.core.network.SettingsWriter
 import com.airtel.monitor.core.network.WriteSpec
 import com.airtel.monitor.core.util.NetworkFormatters.isIpv4
+import com.airtel.monitor.core.util.WifiAndLanValidators
 import com.airtel.monitor.data.dto.parseDnsConfig
 import com.airtel.monitor.data.model.DnsConfig
+import com.airtel.monitor.data.model.LanConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,9 @@ class LanRepository(
 ) {
     private val _dnsConfig = MutableStateFlow<DnsConfig?>(null)
     val dnsConfig: StateFlow<DnsConfig?> = _dnsConfig.asStateFlow()
+
+    private val _lanConfig = MutableStateFlow<LanConfig?>(null)
+    val lanConfig: StateFlow<LanConfig?> = _lanConfig.asStateFlow()
 
     fun loadDns(): RouterResult<DnsConfig> {
         return when (val res = session.execute(3)) {
@@ -106,6 +111,140 @@ class LanRepository(
             else -> res
         }
     }
+
+    /** Loads the full `cmd 3` LAN / DHCP / DNS configuration and updates both flows. */
+    fun loadLanConfig(): RouterResult<LanConfig> {
+        val res = session.execute(3, "GET", timeoutSeconds = 5L)
+        if (res !is RouterResult.Ok) {
+            return when (res) {
+                is RouterResult.NotLoggedIn -> res
+                is RouterResult.LimitedAccess -> res
+                is RouterResult.Unreachable -> res
+                is RouterResult.BadResponse -> res
+                is RouterResult.Ok -> error("unreachable")
+            }
+        }
+        val cfg = parseLanConfig(res.data)
+        _lanConfig.value = cfg
+        _dnsConfig.value = cfg.toDnsConfig()
+        return RouterResult.Ok(cfg)
+    }
+
+    /**
+     * Saves LAN/DHCP/DNS settings through `SettingsWriter` (`cmd 3`).
+     * Preserves all `LAN_SAVE_KEYS` (+ `bindPort0` when `supportList` exists) and verifies read-back.
+     */
+    suspend fun saveLanDhcpSettings(
+        lanIp: String,
+        netMask: String,
+        dhcpEnabled: Boolean,
+        ipBegin: String,
+        ipEnd: String,
+        expireTime: String,
+        primaryDns: String,
+        secondaryDns: String
+    ): RouterResult<LanConfig> {
+        val cleanIp = lanIp.trim()
+        val cleanMask = netMask.trim()
+        val cleanBegin = ipBegin.trim()
+        val cleanEnd = ipEnd.trim()
+        val cleanExpire = expireTime.trim().ifEmpty { "24h" }
+        val cleanPrimaryDns = primaryDns.trim()
+        val cleanSecondaryDns = secondaryDns.trim()
+
+        WifiAndLanValidators.validateDhcpSettings(
+            lanIp = cleanIp,
+            netMask = cleanMask,
+            dhcpEnabled = dhcpEnabled,
+            ipBegin = cleanBegin,
+            ipEnd = cleanEnd
+        )?.let { err ->
+            return RouterResult.BadResponse(err, "")
+        }
+
+        if (cleanPrimaryDns.isNotEmpty() && !isIpv4(cleanPrimaryDns)) {
+            return RouterResult.BadResponse("Invalid Primary DNS IPv4 address", "")
+        }
+        if (cleanSecondaryDns.isNotEmpty() && !isIpv4(cleanSecondaryDns)) {
+            return RouterResult.BadResponse("Invalid Secondary DNS IPv4 address", "")
+        }
+        if (cleanPrimaryDns.isNotEmpty() && cleanSecondaryDns == cleanPrimaryDns) {
+            return RouterResult.BadResponse("Secondary DNS cannot be the same as Primary DNS", "")
+        }
+
+        val expectedDhcp = if (dhcpEnabled) "1" else "0"
+        val res = writer.write(
+            WriteSpec(
+                cmd = 3,
+                preflight = { current ->
+                    if (!current.optBoolean("success", false)) {
+                        RouterResult.BadResponse(current.optString("message", "Could not read LAN settings"), current.toString())
+                    } else {
+                        null
+                    }
+                },
+                buildPayload = { current ->
+                    buildMap {
+                        for (k in LAN_SAVE_KEYS) {
+                            put(k, current.optString(k, ""))
+                        }
+                        if (current.has("supportList")) {
+                            put("bindPort0", current.optString("bindPort0", ""))
+                        }
+                        put("lanIp", cleanIp)
+                        put("netMask", cleanMask)
+                        put("dhcpServer", expectedDhcp)
+                        if (dhcpEnabled) {
+                            put("ipBegin", cleanBegin)
+                            put("ipEnd", cleanEnd)
+                            put("expireTime", cleanExpire)
+                        }
+                        put("main_dns", cleanPrimaryDns)
+                        put("vice_dns", cleanSecondaryDns)
+                    }
+                },
+                verify = { readBack ->
+                    val basicsMatch = readBack.optString("lanIp") == cleanIp &&
+                        readBack.optString("netMask") == cleanMask &&
+                        readBack.optString("dhcpServer") == expectedDhcp &&
+                        readBack.optString("main_dns") == cleanPrimaryDns &&
+                        readBack.optString("vice_dns") == cleanSecondaryDns
+                    if (!basicsMatch) {
+                        false
+                    } else if (dhcpEnabled) {
+                        readBack.optString("ipBegin") == cleanBegin &&
+                            readBack.optString("ipEnd") == cleanEnd
+                    } else {
+                        true
+                    }
+                },
+                parseResult = ::parseLanConfig
+            )
+        )
+
+        return when (res) {
+            is RouterResult.Ok -> {
+                _lanConfig.value = res.data
+                _dnsConfig.value = res.data.toDnsConfig()
+                res
+            }
+            is RouterResult.LimitedAccess -> RouterResult.LimitedAccess(3, res.message)
+            else -> res
+        }
+    }
+
+    private fun parseLanConfig(json: JSONObject): LanConfig = LanConfig(
+        lanIp = json.optString("lanIp", "192.168.1.1"),
+        netMask = json.optString("netMask", "255.255.255.0"),
+        dhcpEnabled = json.optString("dhcpServer", "1") == "1",
+        ipBegin = json.optString("ipBegin", ""),
+        ipEnd = json.optString("ipEnd", ""),
+        expireTime = json.optString("expireTime", ""),
+        primaryDns = json.optString("main_dns", ""),
+        secondaryDns = json.optString("vice_dns", ""),
+        mtu = json.optString("mtu", ""),
+        domain = json.optString("domain", "")
+    )
 
     companion object {
         private val LAN_SAVE_KEYS = listOf(
